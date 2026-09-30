@@ -14,3 +14,15 @@
 | `fx_rates.csv` | 1 row per day | `date` (as-of `efdate`) | `date`, `gel_per_usd` |
 
 Full field descriptions / ველების სრული აღწერა: [docs/task_brief.md](../docs/task_brief.md) · [docs/task_brief.ka.md](../docs/task_brief.ka.md)
+
+## Synthetic data / სინთეზური მონაცემები
+
+**🇬🇧** Without the real files, generate a synthetic portfolio with the same schema (simulated from a documented risk model — no real records) and point the pipeline at it:
+
+**🇬🇪** რეალური ფაილების გარეშე შეგიძლიათ იმავე სტრუქტურის სინთეზური პორტფელი დააგენერიროთ (სიმულაცია აღწერილი რისკის მოდელით — რეალური ჩანაწერების გარეშე) და პაიპლაინი მასზე გაუშვათ:
+
+```bash
+python scripts/make_synthetic_data.py        # -> data/synthetic/ (~11 s, 130,000 policies)
+export CASCO_DATA_DIR=data/synthetic         # PowerShell: $env:CASCO_DATA_DIR="data/synthetic"
+python -m tests.run_all
+```

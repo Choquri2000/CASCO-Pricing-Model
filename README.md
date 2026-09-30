@@ -14,14 +14,14 @@
 <a id="english"></a>
 
 <h1 align="center">CASCO Insurance Pricing Model</h1>
-<p align="center"><em>Claims-cost modelling · Experience rating · GLM / GBM · Bühlmann-Straub credibility</em></p>
+<p align="center"><em>Claims-cost modelling · Experience rating · GLM / GBM · Credibility</em></p>
 
 <p align="center">
+  <a href="https://github.com/Choquri2000/CASCO-Pricing-Model/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/Choquri2000/CASCO-Pricing-Model/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white">
   <img alt="pandas" src="https://img.shields.io/badge/pandas-2.3-150458?logo=pandas&logoColor=white">
   <img alt="statsmodels" src="https://img.shields.io/badge/statsmodels-GLM-4B8BBE">
   <img alt="LightGBM" src="https://img.shields.io/badge/LightGBM-GBM-2E7D32">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-48%20passing-success">
 </p>
 
 ---
@@ -36,10 +36,12 @@ An end-to-end actuarial pricing project built for the **TBC Insurance technical 
 
 | Part | What it is | Output |
 |---|---|---|
-| **A — Segment experience rating** | Loss ratio for every combination of the 4 rating factors, credibility-weighted and capped price corrections vs. a target loss ratio | 1,264 segment rate corrections (CSV + Excel) |
+| **A — Segment experience rating** | Loss ratio for every combination of the 4 rating factors; credibility-weighted, capped rate corrections vs. a target loss ratio | Rate corrections for 1,056 segments (CSV + Excel) |
 | **B — Individual-risk models** | Frequency × severity GLMs, LightGBM challengers, Tweedie, Bühlmann-Straub credibility, model-based rate indication with elasticity, monthly monitoring | Out-of-time validated models + rate indication |
 
-> 🔒 **Data is confidential.** The raw TBC Insurance files are not in this repository — only the code, tests and documentation. See [`data/README.md`](data/README.md) for the expected input files.
+> 🔒 **Data is confidential.** The TBC Insurance files are not in this repository. A **synthetic data set** with the same schema can be generated in seconds, so the code and all 53 tests run without them (see [Run](#-run)).
+
+> 🔍 **Methodology review (v2).** After submission I re-examined the method and corrected five issues: the Gini metric, the exposure base, the LogNormal retransformation, the client filter and Part A credibility. The [review](docs/review.md) documents each fix with before/after figures; the numbers below are the corrected (v2) results.
 
 ---
 
@@ -47,15 +49,26 @@ An end-to-end actuarial pricing project built for the **TBC Insurance technical 
 
 | Portfolio metric | Value |
 |---|---|
-| Policies analysed | **119,745** |
-| Earned premium | GEL 172.4M |
-| Incurred claims | GEL 121.7M |
-| **Loss ratio** | **70.6%** vs 60% target → book under-priced by **~18%** |
+| Policies analysed (individual clients, personal use) | **115,116** |
+| Earned premium | GEL 163.9M |
+| Incurred claims | GEL 115.7M |
+| **Loss ratio** | **70.6%** vs 60% target → the book needs **+17.7%** overall |
 
-- **Young drivers (21–29)** run a loss ratio of **87–89%** vs **63%** for drivers over 40 — even though they already pay ~2× the rate.
-- **No-deductible policies** run at **74.3%** vs **55.5%** with a deductible, yet both pay the **same average rate** — the deductible is not priced.
-- **Low sum-insured vehicles** are the most under-priced: the loss ratio falls from ~75–85% in the smallest bands to **48%** above USD 50k — the rate does not differentiate enough by vehicle value.
-- **Sedans** (78%) run materially hotter than **SUV-class vehicles** (67%).
+- **Young drivers (21–29)** run loss ratios of **87–89%** vs **63%** for drivers over 40 — even though they already pay the highest rates.
+- **No-deductible policies** run at **74.4%** vs **54.9%** with a deductible, yet both pay the **same average rate** — the deductible is not priced.
+- **Low sum-insured vehicles** are under-priced: loss ratios of ~70–87% below USD 12k vs **48%** above USD 50k.
+- **Sedans** (77.7%) run materially hotter than **off-road / SUV-class vehicles** (67.4%).
+
+**Recommended rate changes (Part A, one-way, credibility-weighted):**
+
+| Factor | Loss ratio | Change | vs. book (+17.7%) |
+|---|---|---|---|
+| Age 21–25 / 26–29 | 86.7% / 88.9% | +44.5% / +48.1% | +23% / +26% |
+| Age >40 | 63.0% | +5.1% | −11% |
+| Sedan / Off-road-SUV | 77.7% / 67.4% | +29.5% / +12.4% | +10% / −5% |
+| No deductible / With deductible | 74.4% / 54.9% | +24.0% / −8.5% | +5% / −22% |
+
+Across the 1,056 composite segments, **238** need more than +5% on top of the book-wide increase and **90** need more than 5% less.
 
 ---
 
@@ -63,7 +76,7 @@ An end-to-end actuarial pricing project built for the **TBC Insurance technical 
 
 ```mermaid
 flowchart TD
-    D[("data/<br/>confidential CSVs")] --> L["<b>load_data</b><br/>CASCO + individual + personal-use filters<br/>FX to USD, claims aggregation, deductible resolution<br/>1 row per policy"]
+    D[("data/<br/>confidential CSVs<br/>or synthetic data")] --> L["<b>load_data</b><br/>CASCO + individual + personal-use filters<br/>FX to USD, claims aggregation, deductible resolution<br/>earned policy-years · 1 row per policy"]
     L --> A1
     L --> B1
     subgraph A["Part A: segment experience rating"]
@@ -88,24 +101,23 @@ flowchart TD
 
 | Decision | Why |
 |---|---|
-| **Time-based split** (train `< 2025-01-01`, test after) | A random split leaks future policies and inflates the Gini |
-| **GLM offset re-applied at prediction** | Without it the model predicts a rate, not an expected count (guarded by a test) |
-| **LogNormal GLM instead of Gamma GLM** for severity | Gamma IRLS diverges on the heavy tail (demonstrated in `experiments.py`) |
-| **Freq × Sev and direct Tweedie** | Interpretable decomposition plus a cross-check that handles the zero mass natively |
-| **Credibility uses policy count**, not premium | Premium-based `n` makes every segment "fully credible" (Z ≈ 0.99 vs 0.36) |
-| **±50% cap + credibility shrinkage** | Thin segments cannot produce extreme corrections |
+| **Time-based split** (train `< 2025-01-01`, test after) | A random split leaks future policies into training |
+| **Exposure = earned policy-years**, not earned premium | Premium already contains the price being evaluated |
+| **Offset re-applied at prediction** (GLM offset, LightGBM `init_score`) | Otherwise part-year policies get annual expected counts |
+| **LogNormal severity + Duan smearing** | `exp(E[log S])` is the median; smearing (×1.78) restores the mean |
+| **Exposure-weighted Gini on the predicted rate** + current-premium baseline | A raw Gini rewards policy size — even "years on risk" alone scored 0.25 |
+| **Square-root credibility on claim counts**, complement = portfolio indication | Thin segments move with the book instead of defaulting to "no change" |
+| **Bühlmann-Straub with policy count** as the volume | Premium-based volume makes every segment "fully credible" (Z ≈ 0.99) |
 
-**Out-of-time results (test set):**
+**Out-of-time results (test set, exposure-weighted Gini):**
 
-| Model | Gini |
-|---|---|
-| Frequency — Poisson GLM | 0.391 |
-| Frequency — LightGBM (Poisson) | 0.409 |
-| Severity — LogNormal GLM | 0.266 |
-| Pure premium — Freq × Sev (GLM) | **0.409** |
-| Pure premium — Tweedie GBM | 0.356 |
+| Model | Frequency | Pure premium |
+|---|---|---|
+| Poisson GLM / Freq × Sev GLM | 0.201 | 0.300 |
+| LightGBM (Poisson) / Tweedie GBM | **0.235** | 0.290 |
+| *Current premium (baseline)* | *0.109* | *0.303* |
 
-Model-based indication: average rate change **+18.5%** against a 65% target LR, expected volume change −9.3% (elasticity −0.5).
+The models rank **claim frequency** about twice as well as the current tariff. On total cost they only match it, because the tariff already orders cost through the sum insured. Their value is in finding **mispriced policies**: the predicted loss ratio ranks actual loss ratios on the hold-out with a Gini of **0.159**, above the segment/credibility approach (0.124).
 
 ---
 
@@ -120,20 +132,24 @@ CASCO-Pricing-Model/
 │   ├── recommend.py      # credibility-weighted, capped rate corrections
 │   ├── run.py            # Part A pipeline → CSV + Excel
 │   ├── features.py       # modelling frame + time-based split
-│   ├── frequency.py      # Poisson / NegBin GLM, LightGBM
-│   ├── severity.py       # LogNormal GLM, LightGBM Gamma
+│   ├── frequency.py      # Poisson / NegBin GLM, LightGBM, Gini metrics
+│   ├── severity.py       # LogNormal GLM (smearing), LightGBM Gamma
 │   ├── pure_premium.py   # freq × sev, Tweedie GBM, calibration
 │   ├── credibility.py    # Bühlmann-Straub
 │   ├── pricing.py        # technical premium, rate indication, elasticity
 │   ├── validation.py     # monthly actual-vs-expected monitoring
 │   ├── eda.py            # 9-step exploratory analysis
-│   └── experiments.py    # 8 what-if experiments defending each choice
-├── tests/                # 48 tests across 11 modules
+│   └── experiments.py    # 9 what-if experiments defending each choice
+├── tests/                # 53 tests across 11 modules
+├── scripts/
+│   └── make_synthetic_data.py   # synthetic data set with the same schema
 ├── docs/
-│   ├── report.md / report.ka.md                 # full analysis report (EN / KA)
-│   ├── task_brief.md / task_brief.ka.md         # original task (EN / KA)
-│   ├── presentation/                            # slides: .md, .html, .pdf (EN / KA)
-│   └── modules/                                 # per-module documentation (EN / KA)
+│   ├── review.md / review.ka.md                 # methodology review: v2 corrections
+│   ├── report.md / report.ka.md                 # original analysis report (v1)
+│   ├── task_brief.md / task_brief.ka.md         # original task
+│   ├── presentation/                            # slides: .md, .html, .pdf (v1)
+│   └── modules/                                 # per-module documentation
+├── .github/workflows/tests.yml   # CI: tests on synthetic data
 ├── data/README.md        # expected input files (data itself is not shared)
 └── requirements.txt
 ```
@@ -146,31 +162,39 @@ CASCO-Pricing-Model/
 git clone https://github.com/Choquri2000/CASCO-Pricing-Model.git
 cd CASCO-Pricing-Model
 pip install -r requirements.txt
-# place the confidential CSV files in data/  (see data/README.md)
+
+# Option A — synthetic data (anyone can run this)
+python scripts/make_synthetic_data.py              # writes data/synthetic/
+export CASCO_DATA_DIR=data/synthetic               # PowerShell: $env:CASCO_DATA_DIR="data/synthetic"
+
+# Option B — the real files: place them in data/ (see data/README.md) and skip the two lines above
 
 python -m src.run            # Part A: segment rate corrections  → output/
-python -m src.pure_premium   # Part B: freq × sev vs Tweedie
+python -m src.pure_premium   # Part B: freq × sev vs Tweedie vs current premium
 python -m src.pricing        # Part B: model-based rate indication
 python -m src.validation     # Part B: monthly monitoring
-python -m tests.run_all      # all 48 tests  (or: pytest tests/)
+python -m src.experiments    # 9 what-if experiments
+python -m tests.run_all      # all 53 tests  (or: pytest tests/)
 ```
+
+Results on synthetic data differ from the figures above — those come from the confidential data.
 
 ---
 
 ### ⚠️ Limitations & Next Steps
 
+- The most recent months are immature (claims still being reported) and are not yet developed (IBNR / chain-ladder).
 - Target loss ratios (60% in Part A, 65% in Part B) are management assumptions and should be aligned before use.
-- Elasticity (−0.5) is assumed — it should be calibrated from renewal / lapse data.
-- The most recent months are immature (claims still being reported), so their loss ratios are understated.
-- Next: back-test the indication against realised loss ratios, and search the Tweedie variance power properly.
+- Elasticity (−0.5) is assumed — it should be estimated from renewal / lapse data.
 
 ---
 
 ### 📚 Documentation
 
-- 📄 **Full report:** [English](docs/report.md) · [ქართული](docs/report.ka.md)
+- 🔍 **Methodology review (v2):** [English](docs/review.md) · [ქართული](docs/review.ka.md)
+- 📄 **Original report (v1):** [English](docs/report.md) · [ქართული](docs/report.ka.md)
 - 🎯 **Task brief:** [English](docs/task_brief.md) · [ქართული](docs/task_brief.ka.md)
-- 🖥️ **Presentation:** [English PDF](docs/presentation/presentation.pdf) · [ქართული PDF](docs/presentation/presentation.ka.pdf)
+- 🖥️ **Presentation (v1):** [English PDF](docs/presentation/presentation.pdf) · [ქართული PDF](docs/presentation/presentation.ka.pdf)
 - 🧩 **Module docs:** [load_data](docs/modules/load_data.md) · [segments](docs/modules/segments.md) · [metrics](docs/modules/metrics.md) · [recommend](docs/modules/recommend.md) · [run](docs/modules/run.md)
 
 ---
@@ -189,7 +213,7 @@ python -m tests.run_all      # all 48 tests  (or: pytest tests/)
 <a id="georgian"></a>
 
 <h1 align="center">CASCO დაზღვევის ტარიფიკაციის მოდელი</h1>
-<p align="center"><em>ზარალის ღირებულების მოდელირება · გამოცდილებაზე დაფუძნებული რეიტინგი · GLM / GBM · ბიულმან-შტრაუბის კრედიბილურობა</em></p>
+<p align="center"><em>ზარალის ღირებულების მოდელირება · გამოცდილებაზე დაფუძნებული რეიტინგი · GLM / GBM · კრედიბილურობა</em></p>
 
 ---
 
@@ -203,10 +227,12 @@ python -m tests.run_all      # all 48 tests  (or: pytest tests/)
 
 | ნაწილი | რა არის | შედეგი |
 |---|---|---|
-| **A — სეგმენტური ანალიზი** | ზარალიანობა ტარიფის 4 ფაქტორის ყველა კომბინაციისთვის; კრედიბილურობით შეწონილი და შეზღუდული ფასის კორექცია სამიზნე ზარალიანობასთან შედარებით | 1,264 სეგმენტის ტარიფის კორექცია (CSV + Excel) |
+| **A — სეგმენტური ანალიზი** | ზარალიანობა ტარიფის 4 ფაქტორის ყველა კომბინაციისთვის; კრედიბილურობით შეწონილი და შეზღუდული ტარიფის კორექცია სამიზნე ზარალიანობასთან შედარებით | 1,056 სეგმენტის ტარიფის კორექცია (CSV + Excel) |
 | **B — ინდივიდუალური რისკის მოდელები** | სიხშირე × სიმძიმის GLM-ები, LightGBM, Tweedie, ბიულმან-შტრაუბის კრედიბილურობა, მოდელზე დაფუძნებული ტარიფის ინდიკაცია ელასტიურობით, ყოველთვიური მონიტორინგი | დროით გარეთ ვალიდირებული მოდელები + ტარიფის ინდიკაცია |
 
-> 🔒 **მონაცემები კონფიდენციალურია.** TBC დაზღვევის ნედლი ფაილები რეპოზიტორიაში არ არის — მხოლოდ კოდი, ტესტები და დოკუმენტაცია. საჭირო ფაილების ჩამონათვალი: [`data/README.md`](data/README.md).
+> 🔒 **მონაცემები კონფიდენციალურია.** TBC დაზღვევის ფაილები რეპოზიტორიაში არ არის. იმავე სტრუქტურის **სინთეზური მონაცემები** რამდენიმე წამში გენერირდება, ამიტომ კოდი და 53-ვე ტესტი მათ გარეშეც ეშვება (იხ. [გაშვება](#-გაშვება)).
+
+> 🔍 **მეთოდოლოგიის გადახედვა (v2).** წარდგენის შემდეგ მეთოდი ხელახლა შევამოწმე და გავასწორე ხუთი პრობლემა: Gini მეტრიკა, ექსპოზიციის ბაზა, LogNormal-ის უკუგარდაქმნა, კლიენტების ფილტრი და ნაწილი A-ს კრედიბილურობა. [გადახედვაში](docs/review.ka.md) თითოეული შესწორება აღწერილია „მანამდე/შემდეგ“ მაჩვენებლებით; ქვემოთ მოცემულია შესწორებული (v2) შედეგები.
 
 ---
 
@@ -214,15 +240,26 @@ python -m tests.run_all      # all 48 tests  (or: pytest tests/)
 
 | პორტფელის მეტრიკა | მნიშვნელობა |
 |---|---|
-| გაანალიზებული პოლისები | **119,745** |
-| გამომუშავებული პრემია | GEL 172.4M |
-| ზარალი | GEL 121.7M |
-| **ზარალიანობა** | **70.6%** 60%-იანი სამიზნის ნაცვლად → პორტფელი **~18%-ით** ნაკლებადაა შეფასებული |
+| გაანალიზებული პოლისები (ფიზიკური პირები, პირადი გამოყენება) | **115,116** |
+| გამომუშავებული პრემია | GEL 163.9M |
+| ზარალი | GEL 115.7M |
+| **ზარალიანობა** | **70.6%** 60%-იანი სამიზნის ნაცვლად → პორტფელს საერთო ჯამში **+17.7%** სჭირდება |
 
-- **ახალგაზრდა მძღოლები (21–29)** — ზარალიანობა **87–89%**, 40+ ასაკის მძღოლებთან **63%**-ია — მიუხედავად იმისა, რომ ისინი უკვე ~2-ჯერ მაღალ ტარიფს იხდიან.
-- **ფრანშიზის გარეშე პოლისები** — **74.3%**, ფრანშიზიანებთან **55.5%**, თუმცა ორივე **ერთსა და იმავე საშუალო ტარიფს** იხდის — ფრანშიზა ფასში არ არის ასახული.
-- **დაბალი დაზღვეული თანხის ავტომობილები** ყველაზე ნაკლებადაა შეფასებული: ზარალიანობა ყველაზე დაბალ დიაპაზონებში ~75–85%-ია, USD 50k-ზე ზემოთ კი **48%** — ტარიფი ავტომობილის ღირებულების მიხედვით საკმარისად არ დიფერენცირდება.
-- **სედანები** (78%) მნიშვნელოვნად უარესია, ვიდრე **მაღალი გამავლობის ავტომობილები** (67%).
+- **ახალგაზრდა მძღოლები (21–29)** — ზარალიანობა **87–89%**, 40+ ასაკის მძღოლებთან **63%**-ია — მიუხედავად იმისა, რომ ისინი უკვე ყველაზე მაღალ ტარიფს იხდიან.
+- **ფრანშიზის გარეშე პოლისები** — **74.4%**, ფრანშიზიანებთან **54.9%**, თუმცა ორივე **ერთსა და იმავე საშუალო ტარიფს** იხდის — ფრანშიზა ფასში არ არის ასახული.
+- **დაბალი დაზღვეული თანხის ავტომობილები** ნაკლებადაა შეფასებული: ზარალიანობა USD 12k-მდე ~70–87%-ია, USD 50k-ზე ზემოთ კი **48%**.
+- **სედანები** (77.7%) მნიშვნელოვნად უარესია, ვიდრე **მაღალი გამავლობის ავტომობილები** (67.4%).
+
+**რეკომენდებული ტარიფის ცვლილებები (ნაწილი A, ერთფაქტორიანი, კრედიბილურობით შეწონილი):**
+
+| ფაქტორი | ზარალიანობა | ცვლილება | პორტფელთან (+17.7%) შედარებით |
+|---|---|---|---|
+| ასაკი 21–25 / 26–29 | 86.7% / 88.9% | +44.5% / +48.1% | +23% / +26% |
+| ასაკი >40 | 63.0% | +5.1% | −11% |
+| სედანი / მაღალი გამავლობის | 77.7% / 67.4% | +29.5% / +12.4% | +10% / −5% |
+| ფრანშიზის გარეშე / ფრანშიზით | 74.4% / 54.9% | +24.0% / −8.5% | +5% / −22% |
+
+1,056 კომპოზიტური სეგმენტიდან **238**-ს პორტფელის საერთო ზრდაზე +5%-ზე მეტი დამატებითი ზრდა სჭირდება, **90**-ს კი — 5%-ზე მეტით ნაკლები.
 
 ---
 
@@ -230,7 +267,7 @@ python -m tests.run_all      # all 48 tests  (or: pytest tests/)
 
 ```mermaid
 flowchart TD
-    D[("data/<br/>კონფიდენციალური CSV-ები")] --> L["<b>load_data</b><br/>ფილტრები: CASCO + ფიზიკური პირი + პირადი გამოყენება<br/>FX → USD, ზარალების აგრეგაცია, ფრანშიზის გარჩევა<br/>1 სტრიქონი = 1 პოლისი"]
+    D[("data/<br/>კონფიდენციალური CSV-ები<br/>ან სინთეზური მონაცემები")] --> L["<b>load_data</b><br/>ფილტრები: CASCO + ფიზიკური პირი + პირადი გამოყენება<br/>FX → USD, ზარალების აგრეგაცია, ფრანშიზის გარჩევა<br/>პოლის-წლები · 1 სტრიქონი = 1 პოლისი"]
     L --> A1
     L --> B1
     subgraph A["ნაწილი A: სეგმენტური ანალიზი"]
@@ -255,24 +292,23 @@ flowchart TD
 
 | გადაწყვეტილება | რატომ |
 |---|---|
-| **დროითი გაყოფა** (train `< 2025-01-01`, test — შემდეგ) | შემთხვევითი გაყოფა მომავლის პოლისებს ტრენინგში შეიტანდა და Gini-ს ხელოვნურად გაზრდიდა |
-| **GLM offset პროგნოზის დროსაც გამოიყენება** | მის გარეშე მოდელი მოსალოდნელ რაოდენობას კი არა, განაკვეთს პროგნოზირებს (ტესტით დაცულია) |
-| **სიმძიმისთვის LogNormal GLM** Gamma GLM-ის ნაცვლად | Gamma IRLS მძიმე კუდზე იშლება (ნაჩვენებია `experiments.py`-ში) |
-| **სიხშირე × სიმძიმე და პირდაპირი Tweedie** | ინტერპრეტირებადი დეკომპოზიცია + ნულოვანი მასის ბუნებრივად მომდელირებელი შემოწმება |
-| **კრედიბილურობა პოლისების რაოდენობით** და არა პრემიით | პრემიით ყველა სეგმენტი „სრულად კრედიბილური“ ხდება (Z ≈ 0.99 vs 0.36) |
-| **±50% ზღვარი + კრედიბილურობა** | მცირე სეგმენტები ექსტრემალურ კორექციას ვერ გამოიწვევს |
+| **დროითი გაყოფა** (train `< 2025-01-01`, test — შემდეგ) | შემთხვევითი გაყოფა მომავლის პოლისებს ტრენინგში შეიტანდა |
+| **ექსპოზიცია = გამომუშავებული პოლის-წლები** და არა პრემია | პრემია უკვე შეიცავს იმ ფასს, რომელიც უნდა შეფასდეს |
+| **offset პროგნოზის დროსაც** (GLM offset, LightGBM `init_score`) | წინააღმდეგ შემთხვევაში არასრული წლის პოლისები წლიურ მოსალოდნელ რაოდენობას მიიღებს |
+| **LogNormal სიმძიმე + დუანის smearing** | `exp(E[log S])` მედიანაა; smearing (×1.78) საშუალოს აღადგენს |
+| **ექსპოზიციით შეწონილი Gini პროგნოზირებულ განაკვეთზე** + მიმდინარე პრემიის საბაზისო ხაზი | ნედლი Gini პოლისის ზომას აჯილდოებს — მხოლოდ „დაზღვევის წლებიც“ კი 0.25-ს იღებდა |
+| **კვადრატული ფესვის კრედიბილურობა ზარალების რაოდენობაზე**, დანამატი = პორტფელის ინდიკაცია | მცირე სეგმენტები პორტფელთან ერთად მოძრაობს და არ რჩება „ცვლილების გარეშე“ |
+| **ბიულმან-შტრაუბი პოლისების რაოდენობით** | პრემიით ყველა სეგმენტი „სრულად კრედიბილური“ ხდება (Z ≈ 0.99) |
 
-**შედეგები დროით გარეთ (ტესტის პერიოდი):**
+**შედეგები დროით გარეთ (ტესტის პერიოდი, ექსპოზიციით შეწონილი Gini):**
 
-| მოდელი | Gini |
-|---|---|
-| სიხშირე — Poisson GLM | 0.391 |
-| სიხშირე — LightGBM (Poisson) | 0.409 |
-| სიმძიმე — LogNormal GLM | 0.266 |
-| სუფთა პრემია — სიხშირე × სიმძიმე (GLM) | **0.409** |
-| სუფთა პრემია — Tweedie GBM | 0.356 |
+| მოდელი | სიხშირე | სუფთა პრემია |
+|---|---|---|
+| Poisson GLM / სიხშირე × სიმძიმე GLM | 0.201 | 0.300 |
+| LightGBM (Poisson) / Tweedie GBM | **0.235** | 0.290 |
+| *მიმდინარე პრემია (საბაზისო)* | *0.109* | *0.303* |
 
-მოდელზე დაფუძნებული ინდიკაცია: საშუალო ტარიფის ცვლილება **+18.5%** (სამიზნე ზარალიანობა 65%), მოსალოდნელი მოცულობის ცვლილება −9.3% (ელასტიურობა −0.5).
+**ზარალის სიხშირეს** მოდელები დაახლოებით ორჯერ უკეთ ალაგებს, ვიდრე მიმდინარე ტარიფი. ჯამურ ღირებულებაზე ისინი მხოლოდ უტოლდება ტარიფს, რადგან ტარიფი ღირებულებას დაზღვეული თანხის მეშვეობით უკვე ალაგებს. მათი ღირებულება **არასწორად შეფასებული პოლისების პოვნაშია**: პროგნოზირებული ზარალიანობა hold-out პერიოდზე რეალურ ზარალიანობას Gini = **0.159**-ით ალაგებს, რაც სეგმენტურ/კრედიბილურობის მიდგომაზე (0.124) მაღალია.
 
 ---
 
@@ -282,31 +318,39 @@ flowchart TD
 git clone https://github.com/Choquri2000/CASCO-Pricing-Model.git
 cd CASCO-Pricing-Model
 pip install -r requirements.txt
-# კონფიდენციალური CSV ფაილები ჩადეთ data/ საქაღალდეში (იხ. data/README.md)
+
+# ვარიანტი A — სინთეზური მონაცემები (ნებისმიერს შეუძლია გაშვება)
+python scripts/make_synthetic_data.py              # ქმნის data/synthetic/-ს
+export CASCO_DATA_DIR=data/synthetic               # PowerShell: $env:CASCO_DATA_DIR="data/synthetic"
+
+# ვარიანტი B — რეალური ფაილები: ჩადეთ data/-ში (იხ. data/README.md) და ზემოთა ორი ხაზი გამოტოვეთ
 
 python -m src.run            # ნაწილი A: სეგმენტების ტარიფის კორექციები → output/
-python -m src.pure_premium   # ნაწილი B: სიხშირე × სიმძიმე vs Tweedie
+python -m src.pure_premium   # ნაწილი B: სიხშირე × სიმძიმე vs Tweedie vs მიმდინარე პრემია
 python -m src.pricing        # ნაწილი B: ტარიფის ინდიკაცია
 python -m src.validation     # ნაწილი B: ყოველთვიური მონიტორინგი
-python -m tests.run_all      # 48-ვე ტესტი  (ან: pytest tests/)
+python -m src.experiments    # 9 what-if ექსპერიმენტი
+python -m tests.run_all      # 53-ვე ტესტი  (ან: pytest tests/)
 ```
+
+სინთეზურ მონაცემებზე შედეგები ზემოთ მოცემულისგან განსხვავდება — ისინი კონფიდენციალური მონაცემებიდანაა.
 
 ---
 
 ### ⚠️ შეზღუდვები და შემდეგი ნაბიჯები
 
+- ბოლო თვეები ჯერ „მოუმწიფებელია“ (ზარალები ჯერ კიდევ ცხადდება) და არ არის განვითარებული (IBNR / chain-ladder).
 - სამიზნე ზარალიანობა (60% ნაწილ A-ში, 65% ნაწილ B-ში) მენეჯმენტის დაშვებაა და გამოყენებამდე უნდა შეთანხმდეს.
-- ელასტიურობა (−0.5) დაშვებაა — უნდა დაკალიბრდეს განახლების / გაუქმების მონაცემებით.
-- ბოლო თვეები ჯერ „მოუმწიფებელია“ (ზარალები ჯერ კიდევ ცხადდება), ამიტომ მათი ზარალიანობა შემცირებულად ჩანს.
-- შემდეგი ნაბიჯი: ინდიკაციის შემოწმება რეალიზებულ ზარალიანობაზე და Tweedie-ს ხარისხის სრულფასოვანი შერჩევა.
+- ელასტიურობა (−0.5) დაშვებაა — უნდა შეფასდეს განახლების / გაუქმების მონაცემებით.
 
 ---
 
 ### 📚 დოკუმენტაცია
 
-- 📄 **სრული რეპორტი:** [ქართული](docs/report.ka.md) · [English](docs/report.md)
+- 🔍 **მეთოდოლოგიის გადახედვა (v2):** [ქართული](docs/review.ka.md) · [English](docs/review.md)
+- 📄 **ორიგინალი რეპორტი (v1):** [ქართული](docs/report.ka.md) · [English](docs/report.md)
 - 🎯 **დავალების ტექსტი:** [ქართული](docs/task_brief.ka.md) · [English](docs/task_brief.md)
-- 🖥️ **პრეზენტაცია:** [ქართული PDF](docs/presentation/presentation.ka.pdf) · [English PDF](docs/presentation/presentation.pdf)
+- 🖥️ **პრეზენტაცია (v1):** [ქართული PDF](docs/presentation/presentation.ka.pdf) · [English PDF](docs/presentation/presentation.pdf)
 - 🧩 **მოდულების დოკუმენტაცია:** [load_data](docs/modules/load_data.ka.md) · [segments](docs/modules/segments.ka.md) · [metrics](docs/modules/metrics.ka.md) · [recommend](docs/modules/recommend.ka.md) · [run](docs/modules/run.ka.md)
 
 ---

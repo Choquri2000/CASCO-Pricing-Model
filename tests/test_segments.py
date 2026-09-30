@@ -15,15 +15,11 @@ Run:  ``python -m tests.test_segments``
 
 import pandas as pd
 
-from src import load_data
-from src import segments as sg
+from tests import _data
 
 
 def _segmented():
-    f = load_data.load_analysis_frame()
-    f = sg.add_segments(f)
-    f = sg.build_segment_key(f)
-    return f
+    return _data.segmented_frame()
 
 
 def test_four_dimensions_present():
@@ -37,7 +33,7 @@ def test_age_bins_have_no_gap():
     # "No gap" means the designed rating range (age >= 18) is fully covered
     # by contiguous bands with no hole (this was the 30-40 lesson). Ages below 18
     # (minors / data artefacts) are outside the rating range and
-    # stay NaN by design; unmatched ages (non-matching clients) are excluded too.
+    # stay NaN by design.
     f = _segmented()
     age = pd.to_numeric(f["age"], errors="coerce")
     in_range = f[age >= 18]

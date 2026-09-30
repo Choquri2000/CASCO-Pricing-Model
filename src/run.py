@@ -63,9 +63,12 @@ def run() -> dict[str, pd.DataFrame]:
     print("Computing portfolio metrics ...")
     overall = aggregate_overall(frame).to_frame(name="value")
 
+    # The portfolio loss ratio is the complement of credibility for every segment.
+    portfolio_lr = float(overall.loc["loss_ratio", "value"])
+
     print("Aggregating by composite segment ...")
     seg = aggregate_by(frame, ["segment"])
-    rec = recommend(seg)
+    rec = recommend(seg, portfolio_loss_ratio=portfolio_lr)
     rec_summary = summarize_recommendations(rec)
 
     # Dimension breakdowns.
@@ -73,7 +76,7 @@ def run() -> dict[str, pd.DataFrame]:
     for dims in DIMENSION_BREAKDOWNS:
         key = "_x_".join(dims)
         bd = aggregate_by(frame, dims)
-        bd = recommend(bd)
+        bd = recommend(bd, portfolio_loss_ratio=portfolio_lr)
         breakdowns[key] = bd
 
     # ---- Write outputs -------------------------------------------------
@@ -103,6 +106,9 @@ def run() -> dict[str, pd.DataFrame]:
     print("\n=== Top 15 segments by earned premium ===")
     with pd.option_context("display.max_rows", 15, "display.width", 220):
         print(rec_summary.head(15).to_string(index=False))
+
+    print("\n=== Recommended actions (composite segments) ===")
+    print(rec_summary["action"].value_counts().to_string())
 
     return {
         "frame": frame,

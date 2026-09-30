@@ -1,0 +1,41 @@
+name: tests
+
+# The real data is confidential, so CI generates the synthetic data set
+# (scripts/make_synthetic_data.py) and runs the full test suite against it.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate synthetic data
+        run: python scripts/make_synthetic_data.py --out data/synthetic
+
+      - name: Run the test suite
+        env:
+          CASCO_DATA_DIR: data/synthetic
+          PYTHONWARNINGS: ignore
+        run: python -m tests.run_all
+
+      - name: Smoke-test the pipelines
+        env:
+          CASCO_DATA_DIR: data/synthetic
+          PYTHONWARNINGS: ignore
+        run: |
+          python -m src.run
+          python -m src.pure_premium
+          python -m src.validation

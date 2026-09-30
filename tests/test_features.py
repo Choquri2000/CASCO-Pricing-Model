@@ -7,7 +7,7 @@ random) would leak the future and inflate every later Gini. We check that:
 
   * make_time_split has zero policy overlap and respects the cutoff,
   * y_sev is defined only where a claim occurred,
-  * exposure is non-negative,
+  * exposure is earned policy-years (not premium) and non-negative,
   * build_features engineers the expected columns.
 
 Run:  ``python -m tests.test_features``
@@ -16,13 +16,12 @@ Run:  ``python -m tests.test_features``
 import numpy as np
 import pandas as pd
 
-from src import load_data
 from src import features as ft
+from tests import _data
 
 
 def _feat():
-    raw = load_data.load_analysis_frame()
-    return ft.build_features(raw)
+    return ft.build_features(_data.analysis_frame())
 
 
 def test_time_split_has_no_overlap_and_respects_cutoff():
@@ -51,9 +50,10 @@ def test_y_sev_only_where_claim_occurred():
     assert (claimed["y_sev"] >= 0).all(), "severity cannot be negative"
 
 
-def test_exposure_non_negative():
+def test_exposure_is_earned_years():
     f = _feat()
-    assert (f["exposure"] >= 0).all(), "exposure = earned_premium, clipped at 0"
+    assert (f["exposure"] >= 0).all(), "exposure = earned policy-years, clipped at 0"
+    assert np.allclose(f["exposure"], f["earned_years"].clip(lower=0)), "exposure must be time, not premium"
 
 
 def test_build_features_engineering():

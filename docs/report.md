@@ -2,6 +2,8 @@
 
 > 🇬🇪 ქართული ვერსია: [report.ka.md](report.ka.md)
 
+> ℹ️ **Original submission (v1).** Five methodology issues were corrected afterwards and several figures changed — see the [methodology review](review.md) for the corrections and the current results.
+
 *Author: Beka Chokuri*
 *Scope: TBC Insurance CASCO portfolio — physical (individual) clients, personal-use vehicles*
 

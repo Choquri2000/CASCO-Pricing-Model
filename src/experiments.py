@@ -9,10 +9,14 @@ such *what-if*s and prints the result with an explanation of what it teaches:
   2. Severity: show the Gamma GLM divergence (why we dropped it).
   3. Severity: LogNormal vs GBM, with/without claim-count weights.
   4. Pure premium: Tweedie power sweep (1.1 .. 1.7) against the two-part model.
-  5. GBM feature ablation: with vs without log_exposure (the offset substitute).
+  5. Exposure handling in the GBM: init_score offset vs log_exposure feature vs none.
   6. Credibility sensitivity: policy count vs dollar exposure for n_i (the Z~1 bug).
-  7. Calibration effect: rate indication with vs without the calibration factor.
-  8. NegBin vs Poisson: confirm they coincide (no over-dispersion).
+  7. Level bias: LogNormal smearing vs the portfolio calibration factor.
+  8. NegBin vs Poisson: is there over-dispersion?
+  9. Metric check: unweighted Gini on raw amounts vs the exposure-weighted Gini.
+
+All Gini values are exposure-weighted on the predicted rate (`frequency.gini_normalized`)
+unless stated otherwise.
 
 Run:  ``python -m src.experiments``
 """
@@ -21,6 +25,8 @@ from __future__ import annotations
 
 import sys
 import warnings
+from functools import lru_cache
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -35,19 +41,31 @@ from . import credibility as cr
 from . import pricing as pr
 
 
-def _split():
+@lru_cache(maxsize=1)
+def _segmented_features():
+    # Loaded once: the raw load is the slow part of every experiment.
     raw = load_data.load_analysis_frame()
-    feat = ft.build_features(raw)
-    return ft.make_time_split(feat)
+    raw = sg.add_segments(raw)
+    raw = sg.build_segment_key(raw)
+    return ft.build_features(raw)
 
 
-def _fit_gbm(X, y, exp, num_leaves=31, learning_rate=0.05, objective="poisson"):
+def _split():
+    return ft.make_time_split(_segmented_features())
+
+
+def _fit_gbm(X, y, offset_exposure=None, weight=None, num_leaves=31,
+             learning_rate=0.05, objective="poisson"):
     import lightgbm as lgb
     m = lgb.LGBMRegressor(objective=objective, n_estimators=300,
                           learning_rate=learning_rate, num_leaves=num_leaves,
                           min_child_samples=50, verbose=-1)
-    m.fit(np.asarray(X, dtype=float), np.asarray(y, dtype=float),
-          sample_weight=np.asarray(exp, dtype=float))
+    kw = {}
+    if offset_exposure is not None:
+        kw["init_score"] = np.log(np.asarray(offset_exposure, dtype=float))
+    if weight is not None:
+        kw["sample_weight"] = np.asarray(weight, dtype=float)
+    m.fit(np.asarray(X, dtype=float), np.asarray(y, dtype=float), **kw)
     return m
 
 
@@ -57,16 +75,16 @@ def exp_frequency_gbm_sweep():
     print("that Gini/deviance are stable on a small grid (not over-fit-sensitive).")
     train, test = _split()
     tr = train[train["exposure"] > 0]; te = test[test["exposure"] > 0]
-    Xtr, Xte = fr.prepare_X(tr, te, add_log_exposure=True)
+    Xtr, Xte = fr.prepare_X(tr, te)
     ytr, yte = tr["y_freq"].values, te["y_freq"].values
-    ete = te["exposure"].values
+    etr, ete = tr["exposure"].values, te["exposure"].values
     rows = []
     for nl in [15, 31, 63]:
         for lr in [0.05, 0.10]:
-            m = _fit_gbm(Xtr, ytr, tr["exposure"].values, nl, lr)
-            pred = m.predict(np.asarray(Xte, dtype=float))
+            m = _fit_gbm(Xtr, ytr, offset_exposure=etr, num_leaves=nl, learning_rate=lr)
+            pred = fr.predict_gbm(m, Xte, ete)
             rows.append({"num_leaves": nl, "lr": lr,
-                         "gini": round(fr.gini(yte, pred), 4),
+                         "gini": round(fr.gini_normalized(yte, pred, ete), 4),
                          "poisson_dev": round(fr.poisson_deviance(yte, pred), 1)})
     print(pd.DataFrame(rows).to_string(index=False))
 
@@ -78,12 +96,13 @@ def exp_severity_gamma_divergence():
     te = test[(test["n_claims"] > 0) & (test["y_sev"] > 0)].copy()
     Xtr, Xte = sv.prepare_X(tr, te)
     ytr, yte = tr["y_sev"].values, te["y_sev"].values
+    wte = te["n_claims"].values
     Xc_te = sm.add_constant(np.asarray(Xte, dtype=float), has_constant="add")
 
     # LogNormal (our chosen parametric model)
     ln = sv.fit_lognormal(Xtr, ytr)
-    ln_pred = np.exp(ln.predict(Xc_te))
-    print(f"LogNormal GLM : Gini={fr.gini(yte, ln_pred):.4f}  "
+    ln_pred = sv.predict_lognormal(ln, Xc_te)
+    print(f"LogNormal GLM : Gini={sv.severity_gini(yte, ln_pred, wte):.4f}  "
           f"max_pred={ln_pred.max():,.0f}  (sane)")
 
     # Gamma GLM - try the fit and inspect the divergence
@@ -95,10 +114,10 @@ def exp_severity_gamma_divergence():
             gam_pred = gam.predict(Xc_te)
             finite = np.isfinite(gam_pred).all()
             print(f"Gamma GLM    : finite={finite}  max_pred={np.nanmax(gam_pred):.3g}  "
-                  f"Gini={fr.gini(yte, gam_pred):.4f}")
-            print("Lesson: on this heavy-tailed severity, Gamma IRLS either overshoots")
-            print("to an extreme or falls into an inversely-ranked optimum")
-            print("(negative/extreme Gini). LogNormal is the stable choice.")
+                  f"Gini={sv.severity_gini(yte, gam_pred, wte):.4f}")
+            print("Lesson: on this heavy-tailed severity, Gamma IRLS with its default")
+            print("inverse link can overshoot or fall into an inversely-ranked optimum.")
+            print("LogNormal is the stable choice.")
         except Exception as e:
             print(f"Gamma GLM    : fit failed ({type(e).__name__}) -> confirms the divergence.")
 
@@ -108,16 +127,16 @@ def exp_severity_weights():
     train, test = _split()
     tr = train[(train["n_claims"] > 0) & (train["y_sev"] > 0)].copy()
     te = test[(test["n_claims"] > 0) & (test["y_sev"] > 0)].copy()
-    Xtr, Xte = sv.prepare_X(tr, te, add_log_exposure=True)
+    Xtr, Xte = sv.prepare_X(tr, te)
     ytr, yte = tr["y_sev"].values, te["y_sev"].values
-    w = tr["n_claims"].clip(lower=1).values
+    wtr, wte = tr["n_claims"].clip(lower=1).values, te["n_claims"].values
     ln = sv.fit_lognormal(Xtr, ytr)
-    ln_pred = np.exp(ln.predict(sm.add_constant(np.asarray(Xte, dtype=float), has_constant="add")))
-    gbm_w = _fit_gbm(Xtr, ytr, w, objective="gamma")
-    gbm_nw = _fit_gbm(Xtr, ytr, np.ones_like(ytr), objective="gamma")
-    print(f"LogNormal GLM         : Gini={fr.gini(yte, ln_pred):.4f}")
-    print(f"GBM (claim-weighted)  : Gini={fr.gini(yte, gbm_w.predict(np.asarray(Xte, dtype=float))):.4f}")
-    print(f"GBM (unweighted)      : Gini={fr.gini(yte, gbm_nw.predict(np.asarray(Xte, dtype=float))):.4f}")
+    ln_pred = sv.predict_lognormal(ln, sm.add_constant(np.asarray(Xte, dtype=float), has_constant="add"))
+    gbm_w = _fit_gbm(Xtr, ytr, weight=wtr, objective="gamma")
+    gbm_nw = _fit_gbm(Xtr, ytr, objective="gamma")
+    print(f"LogNormal GLM         : Gini={sv.severity_gini(yte, ln_pred, wte):.4f}")
+    print(f"GBM (claim-weighted)  : Gini={sv.severity_gini(yte, gbm_w.predict(np.asarray(Xte, dtype=float)), wte):.4f}")
+    print(f"GBM (unweighted)      : Gini={sv.severity_gini(yte, gbm_nw.predict(np.asarray(Xte, dtype=float)), wte):.4f}")
     print("Lesson: weighting by claim count gives high-information policies more")
     print("influence; the effect is small here, but principled.")
 
@@ -127,49 +146,52 @@ def exp_pure_premium_tweedie_power():
     train, test = _split()
     tr_pp = train[train["exposure"] > 0].copy()
     te_pp = test[test["exposure"] > 0].copy()
-    Xtr, Xte = fr.prepare_X(tr_pp, te_pp, add_log_exposure=True)
+    Xtr, Xte = fr.prepare_X(tr_pp, te_pp)
     ytr, yte = tr_pp["y_pp"].values, te_pp["y_pp"].values
+    ete = te_pp["exposure"].values
     rows = []
     for p in [1.1, 1.3, 1.5, 1.7]:
         m = pp.fit_tweedie(Xtr, ytr, tr_pp["exposure"].values, power=p)
-        pred = m.predict(np.asarray(Xte, dtype=float))
-        rows.append({"tweedie_power": p, "gini": round(fr.gini(yte, pred), 4),
+        pred = fr.predict_gbm(m, Xte, ete)
+        rows.append({"tweedie_power": p, "gini": round(fr.gini_normalized(yte, pred, ete), 4),
                      "deviance": round(pp.tweedie_deviance(yte, pred, p), 1)})
     # two-part baseline
     base = pp.train_and_evaluate(train, test)
     print(pd.DataFrame(rows).to_string(index=False))
     print(base[["model", "gini", "tweedie_deviance"]].round(4).to_string(index=False))
-    print("Lesson: power 1.5 is a sensible default (between Poisson=1 and")
-    print("Gamma=2); the two-part freq x sev still ranks better on this book.")
+    print("Lesson: compare every power with the two-part model AND with the current")
+    print("premium — a model only adds value where it out-ranks the existing tariff.")
 
 
-def exp_gbm_feature_ablation():
-    print("\n=== EXP 5: GBM feature ablation - log_exposure matters ===")
+def exp_gbm_exposure_handling():
+    print("\n=== EXP 5: exposure handling in the frequency GBM ===")
     train, test = _split()
     tr = train[train["exposure"] > 0]; te = test[test["exposure"] > 0]
     ytr, yte = tr["y_freq"].values, te["y_freq"].values
-    Xtr_with, Xte_with = fr.prepare_X(tr, te, add_log_exposure=True)
-    Xtr_without, Xte_without = fr.prepare_X(tr, te, add_log_exposure=False)
-    m_with = _fit_gbm(Xtr_with, ytr, tr["exposure"].values)
-    m_without = _fit_gbm(Xtr_without, ytr, tr["exposure"].values)
-    g_with = fr.gini(yte, m_with.predict(np.asarray(Xte_with, dtype=float)))
-    g_without = fr.gini(yte, m_without.predict(np.asarray(Xte_without, dtype=float)))
-    print(f"GBM with log_exposure    : Gini={g_with:.4f}")
-    print(f"GBM without log_exposure : Gini={g_without:.4f}")
-    print("Lesson: trees have no offset, so without log_exposure")
-    print("they cannot normalise for exposure and rank worse - exactly")
-    print("the bug we fixed in production.")
+    etr, ete = tr["exposure"].values, te["exposure"].values
+    Xtr, Xte = fr.prepare_X(tr, te)
+    Xtr_f, Xte_f = fr.prepare_X(tr, te, add_log_exposure=True)
+
+    m_offset = _fit_gbm(Xtr, ytr, offset_exposure=etr)
+    m_feature = _fit_gbm(Xtr_f, ytr)
+    m_none = _fit_gbm(Xtr, ytr)
+    preds = {
+        "init_score offset (production)": fr.predict_gbm(m_offset, Xte, ete),
+        "log_exposure as a feature": m_feature.predict(np.asarray(Xte_f, dtype=float)),
+        "no exposure information": m_none.predict(np.asarray(Xte, dtype=float)),
+    }
+    for name, pred in preds.items():
+        print(f"{name:32s}: Gini={fr.gini_normalized(yte, pred, ete):.4f}  "
+              f"Poisson dev={fr.poisson_deviance(yte, pred):,.1f}  "
+              f"pred/actual={pred.sum() / yte.sum():.3f}")
+    print("Lesson: trees have no native offset. init_score gives them exactly the GLM")
+    print("offset; without any exposure information the expected counts are mis-scaled")
+    print("for part-year policies.")
 
 
 def exp_credibility_dollar_exposure():
     print("\n=== EXP 6: credibility - policy count vs dollar exposure for n_i ===")
-    # buhlmann_straub groups by the composite "segment" key, so the segments must
-    # be built (add_segments + build_segment_key) before the time split.
-    raw = load_data.load_analysis_frame()
-    raw = sg.add_segments(raw)
-    raw = sg.build_segment_key(raw)
-    feat = ft.build_features(raw)
-    train, _ = ft.make_time_split(feat)
+    train, _ = _split()
     seg, mu, k = cr.buhlmann_straub(train)
     print(f"By policy count   : mean Z = {seg['Z'].mean():.4f}  (real shrinkage)")
     # recompute Z with n_i = dollar exposure (the old bug)
@@ -182,21 +204,21 @@ def exp_credibility_dollar_exposure():
     print("segment and credibility blending does nothing. n_i must be a count of risks.")
 
 
-def exp_calibration_effect():
-    print("\n=== EXP 7: calibration effect on the rate indication ===")
-    raw = load_data.load_analysis_frame()
-    raw = sg.add_segments(raw); raw = sg.build_segment_key(raw)
-    feat = ft.build_features(raw)
-    train, test = ft.make_time_split(feat)
-    pred = pp.predict(train, test)
-    rec_cal = pr.recommend_v2(test, pred * pp.calibration_factor(train), target_loss_ratio=0.65)
-    rec_raw = pr.recommend_v2(test, pred, target_loss_ratio=0.65)
-    print(f"With calibration (factor={pp.calibration_factor(train):.3f}): "
-          f"mean rate change = {rec_cal['rate_change'].mean():+.4f}")
-    print(f"Without calibration                          : "
-          f"mean rate change = {rec_raw['rate_change'].mean():+.4f}")
-    print("Lesson: the multiplicative model under-predicts the average")
-    print("level; without calibration it would (wrongly) suggest a cut for an under-priced book.")
+def exp_level_bias():
+    print("\n=== EXP 7: level bias - LogNormal smearing vs portfolio calibration ===")
+    train, test = _split()
+    for smearing in (False, True):
+        calib = pp.calibration_factor(train, smearing=smearing)
+        pred = pp.predict(train, test, smearing=smearing)
+        rec_raw = pr.recommend_v2(test, pred, target_loss_ratio=0.65)
+        rec_cal = pr.recommend_v2(test, pred * calib, target_loss_ratio=0.65)
+        label = "with smearing   " if smearing else "without smearing"
+        print(f"{label}: calibration factor = {calib:.3f}   mean rate change "
+              f"uncalibrated = {rec_raw['rate_change'].mean():+.4f}, "
+              f"calibrated = {rec_cal['rate_change'].mean():+.4f}")
+    print("Lesson: exp(E[log S]) is the median of a lognormal, not the mean. Without the")
+    print("smearing factor the model under-predicts every claim, and a large portfolio")
+    print("'calibration factor' is needed to hide it; with smearing the factor is ~1.")
 
 
 def exp_negbin_vs_poisson():
@@ -212,9 +234,26 @@ def exp_negbin_vs_poisson():
     Xc = sm.add_constant(np.asarray(Xte, dtype=float), has_constant="add")
     p_pred = pois.predict(Xc, offset=off)
     n_pred = nb.predict(Xc, offset=off)
-    print(f"Poisson Gini={fr.gini(yte, p_pred):.4f}   NegBin Gini={fr.gini(yte, n_pred):.4f}")
-    print("Lesson: they are (almost) identical -> no material")
-    print("over-dispersion beyond what exposure explains; NegBin is kept only for robustness.")
+    alpha = nb.params[-1] if hasattr(nb, "params") and len(nb.params) > Xc.shape[1] else 0.0
+    print(f"Poisson Gini={fr.gini_normalized(yte, p_pred, ete):.4f}   "
+          f"NegBin Gini={fr.gini_normalized(yte, n_pred, ete):.4f}   NegBin alpha={alpha:.4f}")
+    print("Lesson: when the rankings coincide, over-dispersion does not change the")
+    print("risk ordering; NegBin matters for confidence intervals, not for the tariff.")
+
+
+def exp_gini_metric_check():
+    print("\n=== EXP 9: which Gini? raw amounts vs exposure-weighted rate ===")
+    train, test = _split()
+    te = test[test["exposure"] > 0]
+    y, e, prem = te["y_pp"].values, te["exposure"].values, te["earned_premium"].values
+    pred = pp.predict(train, test)
+    print(f"{'predictor':28s} {'unweighted Gini':>16s} {'exposure-weighted':>18s}")
+    for name, p in [("earned premium only", prem), ("exposure (years) only", e),
+                    ("Freq x Sev model", pred)]:
+        print(f"{name:28s} {fr.gini(y, p):16.4f} {fr.gini_normalized(y, p, e):18.4f}")
+    print("Lesson: on raw amounts even 'years on risk' or the premium itself look like")
+    print("good models, because bigger policies simply have bigger losses. The weighted")
+    print("Gini on the predicted rate removes that effect.")
 
 
 def main():
@@ -228,10 +267,11 @@ def main():
     exp_severity_gamma_divergence()
     exp_severity_weights()
     exp_pure_premium_tweedie_power()
-    exp_gbm_feature_ablation()
+    exp_gbm_exposure_handling()
     exp_credibility_dollar_exposure()
-    exp_calibration_effect()
+    exp_level_bias()
     exp_negbin_vs_poisson()
+    exp_gini_metric_check()
     print("\nExperiments complete.")
 
 

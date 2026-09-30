@@ -15,16 +15,12 @@ Run:  ``python -m tests.test_metrics``
 import numpy as np
 import pandas as pd
 
-from src import load_data
-from src import segments as sg
 from src import metrics as mt
+from tests import _data
 
 
 def _seg():
-    f = load_data.load_analysis_frame()
-    f = sg.add_segments(f)
-    f = sg.build_segment_key(f)
-    return mt.aggregate_by(f, ["segment"])
+    return mt.aggregate_by(_data.segmented_frame(), ["segment"])
 
 
 def test_safe_div_returns_nan_not_inf():
@@ -45,6 +41,8 @@ def test_aggregate_by_core_metrics_present():
 def test_aggregate_by_internally_consistent():
     seg = _seg()
     # loss_ratio must equal incurred/earned; frequency must equal claims/policies.
+    # (A segment with no earned premium yet has loss_ratio NaN by design.)
+    seg = seg[seg["earned_premium"] > 0]
     lr = seg["incurred_claim"] / seg["earned_premium"]
     fr = seg["n_claims"] / seg["n_policies"]
     assert ((lr - seg["loss_ratio"]).abs() < 1e-3).all()
@@ -52,9 +50,7 @@ def test_aggregate_by_internally_consistent():
 
 
 def test_portfolio_loss_ratio_known_value():
-    f = load_data.load_analysis_frame()
-    f = sg.add_segments(f)
-    overall = mt.aggregate_overall(f)
+    overall = mt.aggregate_overall(_data.segmented_frame())
     # The documented portfolio loss ratio is ~70.6%.
     assert abs(overall["loss_ratio"] - 0.706) < 0.02, "portfolio LR should be ~0.706"
 

@@ -12,20 +12,12 @@ which makes every segment fully credible (Z≈1). We assert that:
 Run:  ``python -m tests.test_credibility``
 """
 
-import numpy as np
-
-from src import load_data
-from src import segments as sg
-from src import features as ft
 from src import credibility as cr
+from tests import _data
 
 
 def _split():
-    raw = load_data.load_analysis_frame()
-    raw = sg.add_segments(raw)
-    raw = sg.build_segment_key(raw)
-    feat = ft.build_features(raw)
-    return ft.make_time_split(feat)
+    return _data.time_split(segmented=True)
 
 
 def test_z_in_unit_interval_and_k_positive():

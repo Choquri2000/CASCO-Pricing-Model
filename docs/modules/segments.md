@@ -69,7 +69,7 @@ segment = "age:" + client_age_bin
         + " | fr:" + franchise
         + " | si:" + suminsured_usd_bin
 ```
-Used for the most granular aggregation (1,264 distinct segments).
+Used for the most granular aggregation (1,056 distinct segments).
 
 ---
 
@@ -82,4 +82,4 @@ Used for the most granular aggregation (1,264 distinct segments).
 - [x] `client_age_bin` covers every age without gaps (18-20, 21-25, 26-29, 30-40, >40)
 - [x] `vehicle_type` collapses the 7 mapped raw types; residual rare types are kept
 - [x] `suminsured_usd_bin` produces the brief's label set
-- [x] `segment` is unique per combination; 1,264 distinct values at portfolio level
+- [x] `segment` is unique per combination; 1,056 distinct values at portfolio level

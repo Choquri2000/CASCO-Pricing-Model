@@ -57,16 +57,21 @@ def buhlmann_straub(frame, segment_col="segment",
 
 
 def evaluate_out_of_time(train, test):
-    """Estimate credibility on `train`, carry the segment estimates to `test` and score the Gini."""
+    """Estimate credibility on `train`, carry the segment estimates to `test` and score the Gini.
+
+    The segment estimates are loss ratios (cost per unit of premium), so the Gini
+    ranks policies by predicted loss ratio and weights them by earned premium.
+    """
     seg_tr, mu, k = buhlmann_straub(train)
-    test = test.copy()
+    test = test[test["earned_premium"] > 0].copy()
     test["pred_observed"] = test["segment"].map(seg_tr["observed_pp"]).fillna(mu)
     test["pred_cred"] = test["segment"].map(seg_tr["cred_pp"]).fillna(mu)
-    y = test["incurred_claim"] / test["earned_premium"].clip(lower=1e-6)
+    y = test["incurred_claim"].values
+    w = test["earned_premium"].values
     rows = [
-        {"model": "Constant (portfolio mean)", "gini": fr.gini(y, np.full(len(y), mu))},
-        {"model": "Raw observed segment PP", "gini": fr.gini(y, test["pred_observed"])},
-        {"model": "Credibility-blended PP", "gini": fr.gini(y, test["pred_cred"])},
+        {"model": "Constant (portfolio mean)", "gini": fr.gini_normalized(y, np.full(len(y), mu) * w, w)},
+        {"model": "Raw observed segment PP", "gini": fr.gini_normalized(y, test["pred_observed"].values * w, w)},
+        {"model": "Credibility-blended PP", "gini": fr.gini_normalized(y, test["pred_cred"].values * w, w)},
     ]
     return pd.DataFrame(rows), seg_tr, mu, k
 

@@ -6,7 +6,10 @@ into a modelling frame:
   * numeric features: age, log(suminsured_usd) (log fixes the right skew),
     enginecapacity, min_driver_age, named_drivers.
   * categorical features: vehicle_type (collapsed to 3 categories), deductible_type, gender, carage.
-  * exposure: earned_premium (used as the GLM offset / GBM weight).
+  * exposure: earned policy-years (`earned_years`, used as the GLM offset and
+    the GBM init_score offset). Earned premium is *not* used as exposure: it is
+    GWP x earned fraction, so it already contains the current price that the
+    models are meant to evaluate.
   * targets:
         y_freq = n_claims                      (frequency model)
         y_sev  = incurred_claim / n_claims     (severity model, claims > 0)
@@ -75,8 +78,8 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     # Log-transform of sum insured (USD); log1p is safe at 0.
     f["log_suminsured_usd"] = np.log1p(f["suminsured_usd"].clip(lower=0))
 
-    # Exposure = earned premium (must be >= 0 for the offset / weight).
-    f["exposure"] = f["earned_premium"].clip(lower=0)
+    # Exposure = earned policy-years (must be >= 0 for the offset).
+    f["exposure"] = f["earned_years"].clip(lower=0)
 
     # Targets.
     f["y_freq"] = f["n_claims"]
@@ -135,7 +138,7 @@ if __name__ == "__main__":
         if n:
             print(f"  {c}: {n} missing")
 
-    print("\nExposure (earned premium) summary:")
+    print("\nExposure (earned policy-years) summary:")
     print(train["exposure"].describe().round(2).to_string())
     print("\nFrequency target (n_claims) summary:")
     print(train["y_freq"].describe().round(3).to_string())

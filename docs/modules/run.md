@@ -11,7 +11,7 @@
 1. `load_analysis_frame()` → policy-level frame.
 2. `add_segments()` + `build_segment_key()` → four dimensions + the composite `segment`.
 3. `aggregate_overall()` → one-row portfolio summary.
-4. `aggregate_by(["segment"])` → 1,264 composite segments; `recommend()` → corrections.
+4. `aggregate_by(["segment"])` → 1,056 composite segments; `recommend(portfolio_loss_ratio=…)` → corrections blended with the portfolio indication.
 5. `aggregate_by()` on the one- and two-way breakdowns (age, vehicle, deductible, SI, age×vehicle, vehicle×deductible).
 6. Write the outputs; print the portfolio + top-15 segments.
 
@@ -20,7 +20,7 @@
 ## 2. Outputs written
 | File | Contents |
 |---|---|
-| `output/segment_recommendations.csv` | 1,264 segments with corrections and action (UTF-8-BOM) |
+| `output/segment_recommendations.csv` | 1,056 segments with corrections and action (UTF-8-BOM) |
 | `output/portfolio_overall.csv` | one-row portfolio totals |
 | `output/casco_segment_analysis.xlsx` | sheets: `Portfolio_Overall`, `Segment_Recommendations`, + 6 breakdown sheets |
 
@@ -53,6 +53,6 @@ Every module also runs on its own (`python -m src.load_data`, `src.segments`, `s
 
 ## 6. Verification
 - [x] exit code 0; all three output files created
-- [x] `segment_recommendations.csv` has 1,264 data rows
+- [x] `segment_recommendations.csv` has 1,056 data rows
 - [x] the portfolio total matches the `load_data` verification (loss ratio 0.706)
 - [x] top segments sorted by earned premium; corrections within ±50%

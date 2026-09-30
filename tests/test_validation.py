@@ -2,24 +2,19 @@
 
 Why test validation?
 This is the governance layer: it must produce a monthly actual-vs-predicted
-loss-ratio table and confirm that the model (a) ranks risk
-(Gini > 0) and (b) is calibrated in *level* (actual LR ≈ predicted LR).
+loss-ratio table and confirm that the model (a) ranks policies by how mispriced
+they are (Gini of the predicted loss ratio > 0) and (b) is calibrated in *level*.
 We assert both.
 
 Run:  ``python -m tests.test_validation``
 """
 
-import numpy as np
-
-from src import load_data
-from src import features as ft
 from src import validation as vl
+from tests import _data
 
 
 def _split():
-    raw = load_data.load_analysis_frame()
-    feat = ft.build_features(raw)
-    return ft.make_time_split(feat)
+    return _data.time_split()
 
 
 def test_monitoring_report_shape_and_columns():
@@ -31,21 +26,17 @@ def test_monitoring_report_shape_and_columns():
 
 def test_holdout_gini_positive():
     train, test = _split()
-    mon, test_enriched = vl.monitoring_report(train, test)
-    y = test_enriched["incurred_claim"] / test_enriched["earned_premium"].clip(lower=1e-6)
-    pred_lr = test_enriched["pred_lr"].fillna(test_enriched["pred_lr"].mean())
-    from src import frequency as fr
-    assert fr.gini(y, pred_lr) > 0, "the model must rank risk out-of-time"
+    _, test_enriched = vl.monitoring_report(train, test)
+    assert vl.holdout_gini(test_enriched) > 0, "the model must rank mispriced policies out-of-time"
 
 
 def test_level_calibration_close_to_one():
     train, test = _split()
     from src import pure_premium as pp
     # The calibration factor is fitted on the TRAIN portfolio, so by construction the
-    # calibrated train pure-premium predictions match train actual losses in level
-    # (mean cost). This is the contract of `calibration_factor` and what points
-    # the indication in the right direction. Out-of-time drift is expected and is exactly
-    # what the monthly monitoring table is for; it is not tested here.
+    # calibrated train pure-premium predictions match train actual losses in level.
+    # This pins the contract of `calibration_factor`; out-of-time drift is what the
+    # monthly monitoring table is for.
     calib = pp.calibration_factor(train)
     pred = pp.predict(train, train) * calib
     mask = train["exposure"] > 0

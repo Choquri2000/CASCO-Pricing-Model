@@ -99,12 +99,14 @@ def step_target_severity(df: pd.DataFrame):
 
 
 def step_exposure(df: pd.DataFrame):
-    _section("Step 4 — Exposure (earned premium)")
+    _section("Step 4 — Exposure (earned policy-years)")
     exp = df["exposure"]
-    print(f"Exposure min/median/max: {exp.min():,.0f} / {exp.median():,.0f} / {exp.max():,.0f}")
+    print(f"Exposure min/median/max: {exp.min():.3f} / {exp.median():.3f} / {exp.max():.3f} years")
+    print(f"Total earned exposure  : {exp.sum():,.0f} policy-years")
     print(f"Share of exposure <= 0 : {(exp <= 0).mean():.2%}")
-    print("Why: exposure is the GLM offset / GBM weight. It must be > 0; we clip"
-          " at 0 in features.py. The few non-positive rows are dropped from the models.")
+    print("Why: exposure is the GLM offset / GBM init_score. It is time on risk, not earned"
+          " premium — premium already contains the current price the models must judge."
+          " Rows with no time on risk (e.g. starting after the extraction date) are dropped.")
 
 
 def step_segments(df: pd.DataFrame):

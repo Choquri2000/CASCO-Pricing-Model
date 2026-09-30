@@ -81,7 +81,7 @@ Rounded to 4 decimals. Used for the portfolio-level printout and for `portfolio_
 ## 5. Example (portfolio)
 ```
 loss_ratio = 0.706,  premium_rate = 0.0407,
-frequency = 0.657,  severity = 1546 GEL
+frequency = 0.654,  severity = 1538 GEL
 ```
 
 ## 6. Verification

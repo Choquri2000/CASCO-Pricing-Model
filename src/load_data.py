@@ -10,6 +10,11 @@ Steps:
 5. Resolve the deductible (franchise) field from enrcols and map it to a Yes/No
    ``deductible_type`` via ``franchise_field_categories.csv``.
 6. Keep personal-use policies only (enrcols ``გამოყენება`` = "usage").
+7. Compute the earned exposure in policy-years (time on risk up to the data
+   extraction date) — the exposure base for the frequency / pure-premium models.
+
+The data directory defaults to ``<repo>/data`` and can be overridden with the
+``CASCO_DATA_DIR`` environment variable (e.g. to run on the synthetic data set).
 """
 # For hints #
 from __future__ import annotations
@@ -18,7 +23,13 @@ import os
 import numpy as np
 import pandas as pd
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+DATA_DIR = os.environ.get(
+    "CASCO_DATA_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"),
+)
+
+# Data extraction date from the task brief: nothing is observed after this day.
+EXTRACTION_DATE = pd.Timestamp("2026-05-15")
 
 VALID_CLAIM_STATUSES = ["Easy Settlement", "Hard Settlement"]
 
@@ -163,12 +174,14 @@ def load_analysis_frame() -> pd.DataFrame:
     df["incurred_claim"] = df["incurred_claim"].fillna(0.0)   # no claims -> 0
     df["n_claims"] = df["n_claims"].fillna(0).astype(int)     # no claims -> 0
 
-    # 4) Attach physical-client attributes
+    # 4) Physical clients only (the brief excludes legal entities). An inner join
+    #    drops policies of legal-entity / unknown clients instead of keeping them
+    #    with empty client attributes.
     clients["clientstatus"] = clients["clientstatus"].astype(str)
     physical = clients[clients["clientstatus"].str.contains("ფიზიკურ", na=False)].copy()  # physical only
     df = df.merge(                                                                        # age/gender/segment
         physical[["clientid", "age", "gender", "subsegmentkey", "subsegmentname"]],
-        on="clientid", how="left")
+        on="clientid", how="inner")
 
     # 5) Deductible enrichment + personal use only
     df = df.merge(enr, left_on="policyid", right_on="id", how="left")  # 1:1 enrichment
@@ -181,6 +194,17 @@ def load_analysis_frame() -> pd.DataFrame:
     df["loss_ratio"] = np.where(                                       # loss ratio (safe divide)
         df["earned_premium"] > 0, df["incurred_claim"] / df["earned_premium"], np.nan)
 
+    # 7) Earned exposure in policy-years: time on risk from the start date to the
+    #    earliest of expiry, cancellation and the extraction date. Unlike earned
+    #    premium, this does not contain the current price, so a model fitted on it
+    #    can be used to judge that price.
+    end = pd.concat(
+        [pd.to_datetime(df["todate"], errors="coerce"),
+         pd.to_datetime(df["cancellationdate"], errors="coerce")],
+        axis=1,
+    ).min(axis=1).clip(upper=EXTRACTION_DATE)
+    df["earned_years"] = ((end - df["efdate"]).dt.days / 365.25).clip(lower=0).fillna(0.0)
+
     return df
 
 
@@ -190,4 +214,5 @@ if __name__ == "__main__":
     print(f"Analysis frame shape: {frame.shape}")
     print(frame.head())
     print("\nLoss-ratio NaNs (no earned premium):", frame["loss_ratio"].isna().sum())
-    print("Personal-use rows:", len(frame))
+    print("Physical-client, personal-use rows:", len(frame))
+    print(f"Earned exposure: {frame['earned_years'].sum():,.0f} policy-years")

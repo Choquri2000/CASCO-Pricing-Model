@@ -11,7 +11,8 @@
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `DATA_DIR` | `../data` (relative to the file) | every CSV read points here |
+| `DATA_DIR` | `../data` (relative to the file), or the `CASCO_DATA_DIR` environment variable | every CSV read points here (set the variable to use the synthetic data) |
+| `EXTRACTION_DATE` | `2026-05-15` | data extraction date from the brief; nothing is observed after it |
 | `VALID_CLAIM_STATUSES` | `["Easy Settlement","Hard Settlement"]` | only these claims count as incurred losses |
 | `ENRCOLS_COLS` | list of Georgian column names | subset loaded from the large `enrcols.csv` |
 | `NONSTD_MARKER` | `"არასტანდარტული ფრანშიზა (დაუდგენლის გარეშე)"` | marker meaning "non-standard deductible" |
@@ -82,8 +83,8 @@ n_claims(policy)       = number of those claims
 ```
 Left-joined to the policies; missing → `incurred_claim=0`, `n_claims=0`.
 
-### 4.3 Physical-client attributes
-Select `clientstatus` containing `"ფიზიკურ"` (physical); left-join `age, gender, subsegmentkey, subsegmentname`.
+### 4.3 Physical clients only
+Select `clientstatus` containing `"ფიზიკურ"` (physical) and **inner**-join `age, gender, subsegmentkey, subsegmentname`. Policies of legal entities and clients with an unknown status are dropped (4,629 policies; v1 used a left join and kept them — see the [methodology review](../review.md)).
 
 ### 4.4 Deductible + personal use
 Left-join the enrcols features on `policyid = id`; keep only rows whose `გამოყენება` (usage) contains `"პირად"` (personal).
@@ -94,17 +95,25 @@ premium_rate_gel = grosswrittenpremiumgel / suminsuredgel
 loss_ratio       = incurred_claim / earned_premium      (NaN where earned_premium <= 0)
 ```
 
+### 4.6 Earned exposure in policy-years (formula)
+```
+end          = min(todate, cancellationdate, EXTRACTION_DATE)
+earned_years = max(0, (end - efdate).days / 365.25)
+```
+Time on risk, used as the exposure of the frequency / pure-premium models. Earned premium is not used as exposure because it already contains the current price (`earned_premium` = written premium × earned fraction of the term).
+
 ---
 
 ## 5. Output schema (main columns)
 `policyid, clientid, efdate, suminsuredgel, suminsured_usd, earned_premium,
 grosswrittenpremiumgel, incurred_claim, n_claims, age, gender, deductible_type,
-deductible_category, premium_rate_gel, loss_ratio, …` (47 columns in total).
+deductible_category, premium_rate_gel, loss_ratio, earned_years, …` (48 columns on the real data).
 
 ## 6. Verification checklist (see `tests/test_load_data.py`)
-- [x] frame = 119,745 rows
+- [x] frame = 115,116 rows, all of them physical clients
 - [x] `policyid`/`clientid` unique; enrcols de-duplicated to 1 row/id
 - [x] CASCO filter reconciles raw vs reader
 - [x] `suminsured_usd` has 0 nulls; FX spot-checked by hand
-- [x] `deductible_type="No"` only in zero-deductible categories (No=106,049, Yes=13,696)
+- [x] `deductible_type="No"` only in zero-deductible categories (No=102,190, Yes=12,926)
 - [x] claim totals match a sample policy
+- [x] `earned_years` is between 0 and the policy term; 0 for policies starting after the extraction date

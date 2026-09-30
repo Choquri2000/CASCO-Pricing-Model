@@ -11,7 +11,8 @@
 
 | კონსტანტა | მნიშვნელობა | დანიშნულება |
 |---|---|---|
-| `DATA_DIR` | `../data` (ფაილის მიმართ ფარდობითი) | ყველა CSV წაკითხვა აჩვენებს აქ |
+| `DATA_DIR` | `../data` (ფაილის მიმართ ფარდობითი), ან გარემოს ცვლადი `CASCO_DATA_DIR` | ყველა CSV წაკითხვა აქ მიუთითებს (სინთეზური მონაცემებისთვის ცვლადი დააყენეთ) |
+| `EXTRACTION_DATE` | `2026-05-15` | მონაცემთა ამოღების თარიღი დავალებიდან; ამის შემდეგ არაფერი დაიკვირვება |
 | `VALID_CLAIM_STATUSES` | `["Easy Settlement","Hard Settlement"]` | მხოლოდ ეს ზარალები ითვლება რეალიზებულ ზარალად |
 | `ENRCOLS_COLS` | ქართული სვეტის სახელების სია | ქვესაერთოდ ჩატვირთული დიდი `enrcols.csv`-დან |
 | `NONSTD_MARKER` | `"არასტანდარტული ფრანშიზა (დაუდგენლის გარეშე)"` | სიგნალი, რომელიც ნიშნავს "არასტანდარტული ფრანშიზა" |
@@ -82,8 +83,8 @@ n_claims(policy)       = ამ ზარალების რაოდენ�
 ```
 მარცხნიდან შეუერთდა პოლისებს; ნაკლულოვანი → `incurred_claim=0`, `n_claims=0`.
 
-### 4.3 ფიზიკური კლიენტების ფილტრი
-დატოვე `clientstatus`, რომელიც შეიცავს `"ფიზიკურ"`-ს; მარცხნიდან-შეუერთე `age, gender, subsegmentkey, subsegmentname`.
+### 4.3 მხოლოდ ფიზიკური კლიენტები
+დატოვე `clientstatus`, რომელიც შეიცავს `"ფიზიკურ"`-ს და **inner** join-ით შეუერთე `age, gender, subsegmentkey, subsegmentname`. იურიდიული პირებისა და უცნობი სტატუსის კლიენტების პოლისები ამოიღება (4,629 პოლისი; v1 left join-ს იყენებდა და მათ ტოვებდა — იხ. [მეთოდოლოგიის გადახედვა](../review.ka.md)).
 
 ### 4.4 ფრანშიზა + პირადი გამოყენება
 მარცხნიდან შეუერთე enrcols ფიჩერები `policyid = id`-ზე; დატოვე მხოლოდ `გამოყენება`, რომელიც შეიცავს `"პირად"`-ს.
@@ -94,17 +95,25 @@ premium_rate_gel = grosswrittenpremiumgel / suminsuredgel
 loss_ratio       = incurred_claim / earned_premium      (NaN სადაც earned_premium <= 0)
 ```
 
+### 4.6 გამომუშავებული ექსპოზიცია პოლის-წლებში (ფორმულა)
+```
+end          = min(todate, cancellationdate, EXTRACTION_DATE)
+earned_years = max(0, (end - efdate).days / 365.25)
+```
+დაზღვევაში ყოფნის დრო — სიხშირისა და სუფთა პრემიის მოდელების ექსპოზიცია. გამომუშავებული პრემია ექსპოზიციად არ გამოიყენება, რადგან ის უკვე შეიცავს მიმდინარე ფასს (`earned_premium` = მოზიდული პრემია × ვადის გამომუშავებული წილი).
+
 ---
 
 ## 5. გამოსავლის სქემა (ძირითადი სვეტები)
 `policyid, clientid, efdate, suminsuredgel, suminsured_usd, earned_premium,
 grosswrittenpremiumgel, incurred_claim, n_claims, age, gender, deductible_type,
-deductible_category, premium_rate_gel, loss_ratio, …` (სულ 47 სვეტი).
+deductible_category, premium_rate_gel, loss_ratio, earned_years, …` (რეალურ მონაცემებზე 48 სვეტი).
 
 ## 6. ვერიფიკაციის ჩეკლისტი (იხ. `tests/test_load_data.py`)
-- [x] ჩარჩო = 119,745 რიგი
+- [x] ჩარჩო = 115,116 რიგი, ყველა ფიზიკური კლიენტი
 - [x] `policyid`/`clientid` უნიკალური; enrcols დედუპლირებულია 1 რიგი/id-ზე
 - [x] CASCO ფილტრი თანხვევა ნედლს vs წამკითხველს
 - [x] `suminsured_usd` 0 ნული; FX ხელით შემოწმება ზუსტი
-- [x] `deductible_type="No"` მხოლოდ ნულოვანი გამოკლების კატეგორიებში (No=106,049, Yes=13,696)
+- [x] `deductible_type="No"` მხოლოდ ნულოვანი გამოკლების კატეგორიებში (No=102,190, Yes=12,926)
 - [x] ზარალების ჯამი ემთხვევა სამაგალითო პოლისს
+- [x] `earned_years` 0-სა და პოლისის ვადას შორისაა; 0 — ამოღების თარიღის შემდეგ დაწყებული პოლისებისთვის

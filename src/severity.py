@@ -3,10 +3,11 @@
 
 Fitted on claim-bearing policies only and evaluated out-of-time:
   1. LogNormal GLM (log link) — a Gaussian GLM on log(severity); the stable,
-     standard choice for this heavy-tailed target.
+     standard choice for this heavy-tailed target. Back-transformed with the
+     Duan smearing factor so that it predicts the *mean* severity.
   2. LightGBM challenger (objective = "gamma")
 
-Evaluation uses the insurance Gini (severity ranking) and the Gamma
+Evaluation uses the claim-weighted insurance Gini (severity ranking) and the Gamma
 deviance (goodness of fit). A constant predictor has Gini = 0.
 
 Note: a Gamma GLM was tried, but statsmodels' IRLS/bfgs breaks down on this
@@ -21,7 +22,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 from . import features as ft
-from . import frequency as fr   # reuse prepare_X (feature preparation) and gini
+from . import frequency as fr   # reuse prepare_X (feature preparation) and the Gini metrics
 
 
 # --------------------------------------------------------------------------- #
@@ -38,7 +39,19 @@ def fit_lognormal(X, y, weights=None):
     # Models log(severity) with a Gaussian GLM (equivalent to a lognormal with a log link).
     Xc = sm.add_constant(np.asarray(X, dtype=float))
     ly = np.log(np.asarray(y, dtype=float))
-    return sm.GLM(ly, Xc, family=sm.families.Gaussian()).fit(disp=0)
+    model = sm.GLM(ly, Xc, family=sm.families.Gaussian()).fit(disp=0)
+    # exp(E[log S]) is the *median* of a lognormal, not its mean. Duan's smearing
+    # factor mean(exp(residual)) restores the mean on the original scale without
+    # assuming normal residuals. Ignoring it under-predicts severity by the same
+    # factor for every policy (this was the source of the old 1.68 calibration factor).
+    model.smearing_factor = float(np.mean(np.exp(ly - model.fittedvalues)))
+    return model
+
+
+def predict_lognormal(model, Xc, smearing: bool = True):
+    """Mean severity from a fitted LogNormal GLM (Xc must include the constant)."""
+    factor = getattr(model, "smearing_factor", 1.0) if smearing else 1.0
+    return np.exp(model.predict(Xc)) * factor
 
 
 def fit_gbm(X, y, weights=None):
@@ -65,23 +78,27 @@ def gamma_deviance(y_true, y_pred) -> float:
     return 2.0 * float(np.sum(y / mu - np.log(y / mu) - 1.0))
 
 
-def evaluate(models, Xte, yte, weights_te=None, Xte_gbm=None) -> pd.DataFrame:
+def severity_gini(y_sev, pred_sev, n_claims) -> float:
+    """Claim-weighted Gini: rank policies by predicted severity, weight by claim count."""
+    w = np.asarray(n_claims, dtype=float)
+    return fr.gini_normalized(np.asarray(y_sev, dtype=float) * w,
+                              np.asarray(pred_sev, dtype=float) * w, w)
+
+
+def evaluate(models, Xte, yte, weights_te=None) -> pd.DataFrame:
+    w = np.ones(len(yte)) if weights_te is None else np.asarray(weights_te, dtype=float)
     rows = []
     for name, m in models.items():
-        if name == "GBM" and Xte_gbm is not None:
-            pred = m.predict(Xte_gbm)                 # keep the DataFrame so feature names match
-        elif name == "GBM":
-            pred = m.predict(Xte)
+        if name == "GBM":
+            pred = m.predict(np.asarray(Xte, dtype=float))
         else:
             Xc = sm.add_constant(np.asarray(Xte, dtype=float), has_constant="add")
-            if name == "LogNormal GLM":
-                pred = np.exp(m.predict(Xc))          # back-transform log -> severity
-            else:
-                pred = m.predict(Xc)
+            pred = predict_lognormal(m, Xc)          # back-transform log -> mean severity
         rows.append({
             "model": name,
-            "gini": fr.gini(yte, pred),
+            "gini": severity_gini(yte, pred, w),
             "gamma_deviance": gamma_deviance(yte, pred),
+            "mean_pred / mean_actual": float(np.average(pred, weights=w) / np.average(yte, weights=w)),
         })
     return pd.DataFrame(rows)
 
@@ -100,7 +117,6 @@ def train_and_evaluate(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
     wte = te["n_claims"].clip(lower=1).values
 
     Xtr, Xte = prepare_X(tr, te)
-    Xtr_g, Xte_g = prepare_X(tr, te, add_log_exposure=True)
     ytr, yte = tr["y_sev"].values, te["y_sev"].values
 
     models = {
@@ -108,11 +124,11 @@ def train_and_evaluate(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
     }
     try:
         import lightgbm  # noqa: F401  (optional challenger)
-        models["GBM"] = fit_gbm(Xtr_g, ytr, wtr)
+        models["GBM"] = fit_gbm(Xtr, ytr, wtr)
     except ImportError:
         print("(lightgbm is not installed — GBM challenger skipped; install with `pip install lightgbm`)")
 
-    return evaluate(models, Xte, yte, wte, Xte_gbm=Xte_g)
+    return evaluate(models, Xte, yte, wte)
 
 
 if __name__ == "__main__":
@@ -127,8 +143,3 @@ if __name__ == "__main__":
     results = train_and_evaluate(train, test)
     print("\nSeverity model — out-of-time evaluation (policies with claims):")
     print(results.round(4).to_string(index=False))
-
-    yte_base = test[test["n_claims"] > 0]["y_sev"].values
-    base_gini = fr.gini(yte_base, np.full(len(yte_base), yte_base.mean()))
-    print(f"\nBaseline (constant) Gini = {base_gini:.4f} "
-          f"(should be ~0; higher Gini = better discrimination)")

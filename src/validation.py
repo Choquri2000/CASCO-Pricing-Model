@@ -31,15 +31,23 @@ def monitoring_report(train, test, target_loss_ratio: float = 0.65):
 
     ef = pd.to_datetime(test["efdate"], errors="coerce")
     test["month"] = ef.dt.to_period("M").astype(str)
-    g = test.groupby("month")
+    # Both loss ratios are ratios of sums over the policies the model scores, so
+    # actual and predicted are measured on the same basis.
+    g = test[test["pred_pp"].notna()].groupby("month")
     mon = pd.DataFrame({
         "n_policies": g.size(),
         "earned_premium": g["earned_premium"].sum(),
-        "actual_lr": g.apply(lambda d: d["incurred_claim"].sum() / d["earned_premium"].sum(), include_groups=False),
-        "pred_lr": g["pred_lr"].mean(),
+        "actual_lr": g["incurred_claim"].sum() / g["earned_premium"].sum(),
+        "pred_lr": g["pred_pp"].sum() / g["earned_premium"].sum(),
     })
     mon["lr_ratio"] = mon["actual_lr"] / mon["pred_lr"]
     return mon, test
+
+
+def holdout_gini(test_enriched: pd.DataFrame) -> float:
+    """Gini of the predicted loss ratio on the holdout, weighted by earned premium."""
+    t = test_enriched[test_enriched["pred_pp"].notna() & (test_enriched["earned_premium"] > 0)]
+    return fr.gini_normalized(t["incurred_claim"].values, t["pred_pp"].values, t["earned_premium"].values)
 
 
 if __name__ == "__main__":
@@ -53,9 +61,8 @@ if __name__ == "__main__":
     print("Monthly monitoring (test / holdout period) — actual vs predicted LR:")
     print(mon.round(4).to_string())
 
-    y = test["incurred_claim"] / test["earned_premium"].clip(lower=1e-6)
-    pred_lr = test["pred_lr"].fillna(test["pred_lr"].mean())
-    print(f"\nTest insurance Gini (pure premium) : {fr.gini(y, pred_lr):.4f}")
-    print(f"Test actual LR     : {y.mean():.4f}")
-    print(f"Test predicted LR  : {pred_lr.mean():.4f}")
+    print(f"\nTest insurance Gini (predicted LR, premium-weighted): {holdout_gini(test):.4f}")
+    scored = test[test["pred_pp"].notna()]
+    print(f"Test actual LR     : {scored['incurred_claim'].sum() / scored['earned_premium'].sum():.4f}")
+    print(f"Test predicted LR  : {scored['pred_pp'].sum() / scored['earned_premium'].sum():.4f}")
     print(f"Target LR          : 0.6500")

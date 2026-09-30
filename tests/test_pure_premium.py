@@ -4,24 +4,22 @@ Why test the pure premium?
 This is the core model (E[cost] = E[N]·E[S]) and the input to pricing. We check that:
 
   * tweedie_deviance >= 0 (and ~0 on a perfect fit),
-  * calibration_factor is a sensible cost-to-cost ratio (~1.68),
+  * with the smearing correction the portfolio calibration factor is close to 1
+    (it was ~1.68 when the LogNormal median was used as if it were the mean),
   * predict() returns one value per test policy with exposure > 0,
-  * train_and_evaluate discriminates (Gini > 0) for both models.
+  * train_and_evaluate discriminates (Gini > 0) and reports the premium baseline.
 
 Run:  ``python -m tests.test_pure_premium``
 """
 
 import numpy as np
 
-from src import load_data
-from src import features as ft
 from src import pure_premium as pp
+from tests import _data
 
 
 def _split():
-    raw = load_data.load_analysis_frame()
-    feat = ft.build_features(raw)
-    return ft.make_time_split(feat)
+    return _data.time_split()
 
 
 def test_tweedie_deviance_nonnegative():
@@ -33,11 +31,12 @@ def test_tweedie_deviance_nonnegative():
     assert pp.tweedie_deviance(y, y) < 1e-2
 
 
-def test_calibration_factor_sensible():
+def test_calibration_factor_close_to_one_with_smearing():
     train, _ = _split()
     cf = pp.calibration_factor(train)
-    # Documented value ~1.68; must be a positive, order-1 ratio.
-    assert 1.0 < cf < 3.0, f"unexpected calibration factor: {cf}"
+    assert 0.8 < cf < 1.25, f"calibration factor should be ~1 after smearing, got {cf:.3f}"
+    cf_raw = pp.calibration_factor(train, smearing=False)
+    assert cf_raw > cf, "without smearing the model under-predicts, so the factor must be larger"
 
 
 def test_predict_aligned_to_exposed_test_rows():
@@ -51,7 +50,8 @@ def test_predict_aligned_to_exposed_test_rows():
 def test_train_and_evaluate_discriminates():
     train, test = _split()
     res = pp.train_and_evaluate(train, test)
-    assert set(res["model"]) == {"Frequency x Severity (GLM)", "Tweedie GBM (direct)"}
+    assert set(res["model"]) == {"Frequency x Severity (GLM)", "Tweedie GBM (direct)",
+                                 "Current premium (baseline)"}
     assert (res["gini"] > 0).all()
     assert (res["tweedie_deviance"] >= 0).all()
 

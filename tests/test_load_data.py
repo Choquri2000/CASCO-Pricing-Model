@@ -6,26 +6,30 @@ Everything downstream (segments, metrics, models) consumes the frame returned by
 result is silently wrong. These tests pin down the *contract* of that frame:
 
   * it is policy-level (one row per policy),
-  * it contains only CASCO / physical / personal-use policies,
+  * it contains only CASCO / physical-client / personal-use policies,
   * the sum insured is FX-normalised to USD,
   * claims are aggregated into incurred_claim / n_claims with zeros filled,
-  * the deductible (franchise) is resolved to Yes/No.
+  * the deductible (franchise) is resolved to Yes/No,
+  * the earned exposure (policy-years) is bounded by the policy term.
 
 Run:  ``python -m tests.test_load_data``   (or ``pytest tests/test_load_data.py``)
 """
 
+import pandas as pd
+
 from src import load_data as ld
+from tests import _data
 
 
 def _frame():
-    # Loaded once per test through the public API; cheap enough for the test suite.
-    return ld.load_analysis_frame()
+    # Built once per session (see tests/_data.py); each test gets a copy.
+    return _data.analysis_frame()
 
 
 def test_frame_is_policy_level_and_nonempty():
     # The frame must be one row per policy and must actually contain data.
     df = _frame()
-    assert df.shape[0] > 100_000, "expected ~119k policies"
+    assert df.shape[0] > 100_000, "expected ~115k policies"
     assert df["policyid"].is_unique, "policyid must be a unique key"
 
 
@@ -36,21 +40,15 @@ def test_only_casco_policies():
 
 
 def test_only_physical_clients():
-    # load_data keeps CASCO + personal-use policies; the personal-use filter
-    # (`გამოყენება` contains "პირად") is the enforced row filter, and physical-client
-    # attributes (age, ...) are LEFT-joined from the clients file. So the "individual"
-    # guarantee is the personal-use filter, and we additionally confirm that the join
-    # attached ages only to genuine physical clients.
+    # The brief needs physical persons only: legal entities and clients with an
+    # unknown status must be dropped, not kept with empty client attributes.
     df = _frame()
-    assert df["გამოყენება"].astype(str).str.contains("პირად", na=False).all(), "frame must be personal-use only"
     clients = ld._read_clients()
     clients["clientstatus"] = clients["clientstatus"].astype(str)
     physical_ids = set(
         clients.loc[clients["clientstatus"].str.contains("ფიზიკურ", na=False), "clientid"]
     )
-    # Where age is populated, the client must be physical (the join is correct).
-    has_age = df["age"].notna()
-    assert df.loc[has_age, "clientid"].isin(physical_ids).all(), "populated ages must come from physical clients"
+    assert df["clientid"].isin(physical_ids).all(), "every policy must belong to a physical client"
 
 
 def test_only_personal_use():
@@ -92,6 +90,17 @@ def test_loss_ratio_computed_only_where_earned_positive():
     # Where defined, loss_ratio == incurred/earned exactly.
     lr = df.loc[mask, "incurred_claim"] / df.loc[mask, "earned_premium"]
     assert ((lr - df.loc[mask, "loss_ratio"]).abs() < 1e-9).all()
+
+
+def test_earned_years_within_policy_term():
+    # Time on risk is never negative, never beyond the extraction date, and never
+    # longer than the policy term itself.
+    df = _frame()
+    term = (pd.to_datetime(df["todate"]) - df["efdate"]).dt.days / 365.25
+    assert (df["earned_years"] >= 0).all()
+    assert (df["earned_years"] <= term + 1e-9).all(), "exposure cannot exceed the policy term"
+    started_late = df["efdate"] >= ld.EXTRACTION_DATE
+    assert (df.loc[started_late, "earned_years"] == 0).all(), "no exposure after the extraction date"
 
 
 if __name__ == "__main__":

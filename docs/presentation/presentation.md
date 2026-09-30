@@ -3,6 +3,8 @@
 
 > 🇬🇪 ქართული ვერსია: [presentation.ka.md](presentation.ka.md) · PDF: [presentation.pdf](presentation.pdf)
 
+> ℹ️ **Original submission (v1).** For the corrected methodology and current results see the [methodology review](../review.md).
+
 **Domain:** Motor (CASCO) insurance · **Two parts:** A — Segment rating · B — Advanced GLMs/GBM
 **Tests:** 48 tests · 11 modules · 0 failures · **Languages:** English + Georgian (KA)
 

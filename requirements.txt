@@ -1,0 +1,10 @@
+# Versions the pipeline and the 48-test suite were run with (Python 3.13).
+pandas==2.3.3
+numpy==2.3.5
+statsmodels==0.14.5
+lightgbm==4.6.0
+openpyxl==3.1.5
+
+# Optional: EDA plots (python -m src.eda) and running the tests with pytest
+matplotlib==3.10.6
+pytest==8.4.2

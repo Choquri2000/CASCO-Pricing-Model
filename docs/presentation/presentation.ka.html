@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CASCO ზარალის ღირებულებისა და ანდერაითინგის ტარიფის მოდელი — პროექტის პრეზენტაცია</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111c33; --panel2:#16233f; --ink:#e8eefc; --muted:#9fb0d0;
+    --accent:#38bdf8; --accent2:#a78bfa; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --line:#243049; --chip:#1e2c4a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI","Noto Sans Georgian",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;line-height:1.6}
+  a{color:var(--accent);text-decoration:none}
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(15,23,42,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 22px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header.nav .brand{font-weight:700;letter-spacing:.3px}
+  header.nav .brand span{color:var(--accent)}
+  header.nav nav{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  header.nav nav a{font-size:12.5px;color:var(--muted);padding:5px 9px;border:1px solid var(--line);
+    border-radius:999px;background:var(--chip)}
+  header.nav nav a:hover{color:var(--ink);border-color:var(--accent)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;z-index:60;transition:width .15s}
+  main{max-width:1080px;margin:0 auto;padding:0 22px 80px}
+  section.slide{min-height:88vh;padding:54px 0 30px;border-bottom:1px dashed var(--line)}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--accent);border:1px solid var(--line);padding:4px 10px;border-radius:999px;margin-bottom:14px}
+  h1{font-size:38px;line-height:1.15;margin:.1em 0 .25em}
+  h2{font-size:28px;margin:.1em 0 .4em}
+  h3{font-size:19px;color:var(--accent2);margin:1.1em 0 .4em}
+  p{color:var(--ink)}
+  .muted{color:var(--muted)}
+  ul,ol{margin:.4em 0 1em;padding-left:1.2em}
+  li{margin:.35em 0}
+  .lead{font-size:18px;color:var(--muted);max-width:780px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h4{margin:.1em 0 .35em;font-size:16px}
+  .card p,.card li{font-size:14px;color:var(--muted)}
+  .chip{display:inline-block;background:var(--chip);border:1px solid var(--line);color:var(--muted);
+    font-size:12px;padding:3px 9px;border-radius:999px;margin:2px 4px 2px 0}
+  table{width:100%;border-collapse:collapse;margin:.6em 0 1em;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink)}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
+  .num{font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.good{background:rgba(52,211,153,.15);color:var(--good);border:1px solid rgba(52,211,153,.4)}
+  .pill.warn{background:rgba(251,191,36,.13);color:var(--warn);border:1px solid rgba(251,191,36,.4)}
+  .pill.bad{background:rgba(248,113,113,.13);color:var(--bad);border:1px solid rgba(248,113,113,.4)}
+  .pill.acc{background:rgba(56,189,248,.13);color:var(--accent);border:1px solid rgba(56,189,248,.4)}
+  pre{background:#0b1322;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    overflow:auto;font-size:13px;color:#cfe3ff}
+  code{font-family:"Cascadia Code",Consolas,Monaco,monospace;background:var(--chip);
+    padding:1px 6px;border-radius:6px;font-size:13px}
+  .cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center}
+  .cover h1{font-size:48px}
+  .cover .sub{font-size:19px;color:var(--muted);max-width:760px}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:26px;color:var(--muted);font-size:14px}
+  .meta b{color:var(--ink)}
+  .toc{columns:2;column-gap:30px}
+  @media(max-width:820px){.toc{columns:1}}
+  .toc a{display:block;padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink)}
+  .toc a:hover{color:var(--accent)}
+  .note{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:8px;color:var(--muted);font-size:14px}
+  .big{font-size:32px;font-weight:700;color:var(--accent)}
+  .center{text-align:center}
+  footer{color:var(--muted);font-size:13px;text-align:center;padding:30px 0 10px}
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .flow .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;flex:1;min-width:120px}
+  .flow .step b{color:var(--accent)}
+  .flow .arrow{display:flex;align-items:center;color:var(--muted);font-size:18px}
+  @media(max-width:820px){.flow .arrow{transform:rotate(90deg)}}
+  .print-hint{font-size:12px;color:var(--muted)}
+  @media print{
+    body{background:#fff;color:#111}
+    header.nav,.progress{display:none}
+    section.slide{min-height:auto;border-bottom:1px solid #ccc;page-break-inside:avoid}
+    .card{break-inside:avoid}
+    a{color:#0366d6}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<header class="nav">
+  <div class="brand">CASCO <span>ანდერაითინგი</span></div>
+  <nav>
+    <a href="#cover">გარეკანი</a>
+    <a href="#agenda">გეგმა</a>
+    <a href="#overview">მიმოხილვა</a>
+    <a href="#data">მონაცემები</a>
+    <a href="#arch">არქიტექტურა</a>
+    <a href="#partA">ნაწილი A</a>
+    <a href="#partB">ნაწილი B</a>
+    <a href="#decisions">გადაწყვეტილებები</a>
+    <a href="#eng">ინჟინერია</a>
+    <a href="#tests">ტესტირება</a>
+    <a href="#results">შედეგები</a>
+    <a href="#close">დასკვნა</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- გარეკანი -->
+<section class="slide cover" id="cover">
+  <div class="kicker">TBC დაზღვევა — ტექნიკური ამოცანა</div>
+  <h1>CASCO ზარალის ღირებულებისა და ანდერაითინგის ტარიფის მოდელი</h1>
+  <div class="sub">სრული, აუდიტისთვის მისაღები ტარიფის კონვეიერი — ნედლი პოლისების/ზარალების
+    მონაცემებიდან სეგმენტის გამოცდილებით-რეიტინგამდე და ინდივიდუალურ-რისკის სტატისტიკურ
+    მოდელებამდე, სრული ტესტის, EDA-სა და ექსპერიმენტის ჩარჩოთი.</div>
+  <div class="meta">
+    <div><b>სფერო:</b> ავტომობილის (CASCO) დაზღვევა</div>
+    <div><b>ორი ნაწილი:</b> A — სეგმენტის რეიტინგი · B — გაფართოებული GLM/GBM</div>
+    <div><b>ტესტები:</b> <span class="pill good">48 ტესტი · 11 მოდული · 0 ჩავარდნა</span></div>
+    <div><b>შედეგები:</b> Python კოდი + დოკუმენტაცია + ანგარიში + სახელმძღვანელო</div>
+  </div>
+  <p class="print-hint" style="margin-top:30px">რჩევა: გამოიყენეთ ზედა ნავიგაცია ნებისმიერ სექციაზე გადასასვლელად ან გადააგერე.
+    დაბეჭდეთ / „შეინახეთ PDF-ად“ ბეჭდვადი ვერსიისთვის.</p>
+</section>
+
+<!-- გეგმა -->
+<section class="slide" id="agenda">
+  <div class="kicker">პრეზენტაციის შემადგენლობა</div>
+  <h2>გეგმა</h2>
+  <div class="toc">
+    <a href="#overview">1 · ბიზნეს პრობლემა და მიზნები</a>
+    <a href="#data">2 · მონაცემთა წყაროები და სქემა</a>
+    <a href="#arch">3 · ამოხსნის არქიტექტურა (კონვეიერი)</a>
+    <a href="#partA">4 · ნაწილი A — სეგმენტის გამოცდილებით-რეიტინგი</a>
+    <a href="#partB">5 · ნაწილი B — გაფართოებული სტატისტიკური მოდელები</a>
+    <a href="#decisions">6 · მთავარი მოდელირების გადაწყვეტილებები და „რატომ“</a>
+    <a href="#eng">7 · ინჟინერიის სიმყარე: ტესტები, EDA, ექსპერიმენტები</a>
+    <a href="#tests">8 · რა შევამოწმეთ (სრული მატრიცა)</a>
+    <a href="#results">9 · შედეგები, აღმოჩენები და ინსაითები</a>
+    <a href="#close">10 · დასკვნა და შემდეგი ნაბიჯები</a>
+  </div>
+</section>
+
+<!-- მიმოხილვა -->
+<section class="slide" id="overview">
+  <div class="kicker">სექცია 1</div>
+  <h2>ბიზნეს პრობლემა და მიზნები</h2>
+  <p class="lead">CASCO არის ავტომობილის ყოვლისმომცველი დაზღვევა. წიგნი <b>არასაკმარისად არის
+    ტარიფიკებული</b>: პორტფელის ზარალიანობა შეადგენს <b>70.6%</b> 60%-იანი მენეჯმენტის
+    სამიზნესთან შედარებით — ეს არის დაახლოებით <b>18%-იანი საშუალო ნაკლებად-ტარიფიკება</b>.
+    მიზანია გამჭვირვალე, დასაცავი ტარიფის მოდელი, რომელიც (ა) ხსნის სად აკლია წიგნს ფული და
+    (ბ) მიუთითებს რისკ-ადეკვატურ ტარიფის კორექციებს.</p>
+
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card">
+      <h4>მიზანი 1 — დიაგნოსტიკა</h4>
+      <p>წიგნის დაყოფა რეიტინგის ოთხ განზომილებაზე და 70.6%-ის გამომწვევი ცხელი/ცივი
+        სეგმენტების გამოვლენა.</p>
+    </div>
+    <div class="card">
+      <h4>მიზანი 2 — ინდიკაცია</h4>
+      <p>კრედიბილურობით წონითდებული, შეზღუდული (±50%) ტარიფის კორექციების მითითება
+        თითოეული სეგმენტის გამოცდილებისა და სამიზნე ზარალიანობის მიხედვით.</p>
+    </div>
+    <div class="card">
+      <h4>მიზანი 3 — მოდელირება</h4>
+      <p>ინდივიდუალურ-რისკის სიხშირის × სიმძიმის მოდელების აგება, რომლებიც
+        <b>დროით გარეთ</b> არიან ვალიდირებული, მოდელზე დაფუძნებული ტარიფის ინდიკაციითა და
+        ელასტიურობის რეაქციით.</p>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px">
+    <b>განმარტება:</b> ზარალიანობა (LR) = განხორციელებული ზარალები ÷ მიღებული პრემია. სუფთა
+    პრემიის მოდელი ფასავს <code>E[cost] = E[N] · E[S]</code>, სადაც <code>N</code> = ზარალის
+    რაოდენობა (სიხშირე), ხოლო <code>S</code> = ზარალის თანხა (სიმძიმე). ტექნიკური პრემია =
+    <code>model_pp / target_LR</code>.
+  </div>
+</section>
+
+<!-- მონაცემები -->
+<section class="slide" id="data">
+  <div class="kicker">სექცია 2</div>
+  <h2>მონაცემთა წყაროები და სქემა</h2>
+  <p>ყველა ნედლი შემავალი ინახება <code>data/</code> დირექტორიაში. ერთი სანდო
+    გაწმენდა/გაერთიანების ფენა (<code>src/load_data.py</code>) აქმნის ერთ მონაცემთა ჩარჩოს
+    პოლისის დონეზე, ანალიზისთვის მზად.</p>
+
+  <table>
+    <thead><tr><th>ფაილი</th><th>როლი</th><th>ძირითადი შემცველობა</th></tr></thead>
+    <tbody>
+      <tr><td><code>Policies_1805_v4.csv</code></td><td>პოლისების მასტერი</td><td>პრემია, დაზღვეული თანხა, ავტომობილი, მძღოლის ასაკი, ძალის შესვლის თარიღი, ფრანშიზა</td></tr>
+      <tr><td><code>Claims_1805_v2.csv</code></td><td>ზარალები</td><td>ზარალის თანხები, თარიღები, დაკავშირებული პოლისი</td></tr>
+      <tr><td><code>Clients_1805_v3.csv</code></td><td>კლიენტების მასტერი</td><td>კლიენტის ტიპი (ფიზიკური/იურიდიული), პირადი გამოყენების ნიშანი</td></tr>
+      <tr><td><code>enrcols.csv</code></td><td>პოლისების გამდიდრება</td><td>ფრანშიზის კატეგორია, რენტაბელური მძღოლების რაოდენობა, მინიმალური მძღოლის ასაკი, ავტომობილის ასაკი</td></tr>
+      <tr><td><code>franchise_field_categories.csv</code></td><td>ლუქაფი</td><td>ფრანშიზის კატეგორიის მაპინგი</td></tr>
+      <tr><td><code>fx_rates.csv</code></td><td>ვალუტის კურსი</td><td>კონვერტაცია GEL-ში (USD დაზღვეული თანხა → GEL)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>გაწმენდის წესები (load_data.py)</h3>
+  <ul>
+    <li>მხოლოდ <b>CASCO</b> პოლისები, <b>ფიზიკური</b> კლიენტები, <b>პირადი გამოყენების</b> ავტომობილები.</li>
+    <li>ზარალების ვალიდაცია; დაზღვეული თანხის GEL-ში კონვერტაცია FX-ით; <code>earned_premium</code>-ის გამოთვლა.</li>
+    <li>ზარალების აგრეგირება პოლისის მიხედვით (ნულებით შევსება) და <code>loss_ratio</code>-ის გამოთვლა მხოლოდ იქ,
+      სადაც <code>earned_premium > 0</code> (უსაფრთხო გაყოფა → პირადში NaN).</li>
+    <li><code>exposure = earned_premium.clip(lower=0)</code> — გამოიყენება GLM ოფსეტად / GBM წონად.</li>
+    <li>გამდიდრება <code>deductible_type</code>-ით (კი/არა), <code>eligible_driver_count</code>-ით,
+      <code>min_driver_age</code>-ით, <code>carage</code>-ით enrcols ფაილიდან.</li>
+  </ul>
+  <div class="note">ეს ერთი ფენა არის ერთადერთი ადგილი, სადაც ნედლი მონაცემები ეხება — ყველა შემდგომი
+    მოდული იგივე წმინდა ჩარჩოს მოიხმარს, ამიტომ ცვლილებები წინასწარმეტყველად კასკადურდება.</div>
+</section>
+
+<!-- არქიტექტურა -->
+<section class="slide" id="arch">
+  <div class="kicker">სექცია 3</div>
+  <h2>ამოხსნის არქიტექტურა</h2>
+  <p>ორი თანამშრომელი ნაწილი იზიარებს იგივე გაწმენდილ ჩარჩოს. ნაწილი A არის სწრაფი,
+    განმარტვადი სეგმენტური ხედი; ნაწილი B ამატებს ინდივიდუალურ-რისკის სტატისტიკურ მოდელებს,
+    რომლებიც დროით გარეთ არიან ვალიდირებული.</p>
+
+  <h3>ნაწილი A — სეგმენტის გამოცდილებით-რეიტინგი (run.py კოორდინაციას უწევს)</h3>
+  <div class="flow">
+    <div class="step"><b>load_data</b><br>გაწმენდა + გაერთიანება</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>segments</b><br>4 რეიტინგის განზომილება</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>metrics</b><br>LR, რეიტი, სიხშირე, სიმძიმე</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>recommend</b><br>კრედიბილურობით ±50%</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>run</b><br>CSV + Excel</div>
+  </div>
+
+  <h3 style="margin-top:22px">ნაწილი B — გაფართოებული ინდივიდუალურ-რისკის მოდელები</h3>
+  <div class="flow">
+    <div class="step"><b>features</b><br>საწყობი + დროის გაყოფა</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>frequency</b><br>Poisson/NegBin/GBM</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>severity</b><br>LogNormal/Gamma GBM</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>pure_premium</b><br>freq×sev + Tweedie</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>credibility</b><br>Bühlmann-Straub</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>pricing</b><br>ინდიკაცია + ელასტიურობა</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>validation</b><br>დროით-გარეთ Gini</div>
+  </div>
+
+  <div class="grid g3" style="margin-top:22px">
+    <div class="card"><h4>დროზე დაფუძნებული გაყოფა</h4><p>ტრენინგი <code>efdate < 2025-01-01</code>,
+      ტესტი <code>efdate ≥ 2025-01-01</code>. თავიდან იცილებს გაჟონვას, რომელსაც შემთხვევითი გაყოფა იწვევს.</p></div>
+    <div class="card"><h4>ექსპოზიცია როგორც ოფსეტი</h4><p><code>offset = log(exposure)</code>, სადაც
+      <code>exposure = earned_premium</code>. ხელახლა გამოიყენება პროგნოზის დროს.</p></div>
+    <div class="card"><h4>გამონატანები</h4><p>1,264 სეგმენტი, პორტფელის შეჯამება, 6 დაშლის ფურცელი,
+      პლუს მოდელის მეტრიკები და მონიტორინგის ცხრილები.</p></div>
+  </div>
+</section>
+
+<!-- ნაწილი A -->
+<section class="slide" id="partA">
+  <div class="kicker">სექცია 4</div>
+  <h2>ნაწილი A — სეგმენტის გამოცდილებით-რეიტინგი</h2>
+
+  <h3>სეგმენტაცია (segments.py)</h3>
+  <p>ოთხი რეიტინგის განზომილება, შეკუმშული სტაბილურობისთვის:</p>
+  <div class="grid g4">
+    <div class="card"><h4>ასაკი</h4><p>18–20 · 21–25 · 26–29 · 30–40 · >40</p></div>
+    <div class="card"><h4>ავტომობილის ტიპი</h4><p>მაღალი გამავლობის · სედანი · კუპე/კაბრიო (შეკუმშული 3-ში)</p></div>
+    <div class="card"><h4>ფრანშიზა</h4><p>კი / არა</p></div>
+    <div class="card"><h4>დაზღვეული თანხა</h4><p>USD დიაპაზონები დავალებიდან (≤5k · 1k-იანი ბიჯით 5k–50k · >50k)</p></div>
+  </div>
+  <p class="muted" style="margin-top:10px">→ <b>1,264</b> შედგენილი სეგმენტი (4 განზომილება × დიაპაზონები).</p>
+
+  <h3>მეტრიკები (metrics.py)</h3>
+  <ul>
+    <li><code>aggregate_by</code> თვლის სეგმენტის ზარალიანობას, პოლისის რეიტს, სიხშირეს, სიმძიმეს.</li>
+    <li><code>safe_div</code> აბრუნებს NaN-ს (არა ∞) ნულოვან ექსპოზიციაზე — უსაფრთხოებს ჩუმი უმართობისგან.</li>
+    <li><code>aggregate_overall</code> იძლევა პორტფელის ერთსტრიქონიან ჯამებს.</li>
+  </ul>
+
+  <h3>რეკომენდაციები (recommend.py)</h3>
+  <ul>
+    <li>კორექცია = კრედიბილურობით წონითდებული გამოცდილება <code>target_loss_ratio = 0.60</code>-ის წინაშე.</li>
+    <li>შეზღუდულია <b>±50%</b>-ით; თხე სეგმენტები შემცირდება პორტფელის საშუალოსკენ კრედიბილურობით <code>Z</code>.</li>
+    <li>მოქმედების ლეიბელი (გაზრდა / შემცირება / შენარჩუნება) ემატება ანდერაითერებს.</li>
+  </ul>
+  <div class="note">ყველა კორექცია არის წერტილოვანი შეფასება, რომელიც იგნორირებს ელასტიურობას — დოკუმენტირებული
+    შეზღუდვა (ფასის ცვლილებამ შეიძლება შეცვალოს მოთხოვნა/ნარევი).</div>
+</section>
+
+<!-- ნაწილი B -->
+<section class="slide" id="partB">
+  <div class="kicker">სექცია 5</div>
+  <h2>ნაწილი B — გაფართოებული სტატისტიკური მოდელები</h2>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>სიხშირე (frequency.py)</h4>
+      <ul>
+        <li>Poisson-ისა და Negative-Binomial GLM <code>offset = log(exposure)</code>-ით.</li>
+        <li>LightGBM Poisson GBM იყენებს <code>log_exposure</code> ფიჩერად (ხეებს ოფსეტის გამოყენება ვერ შეუძლიათ ისე, როგორც GLM-ებს).</li>
+        <li>NegBin იწყება Poisson MLE-დან <code>alpha=0.1</code>-ით (არასდროს 0 → თავიდან იცილებს <code>log(0)</code> BFGS გაფუჭებას).</li>
+        <li><b>ოფსეტი ხელახლა გამოიყენება პროგნოზის დროს</b> — GLM, რომელიც ოფსეტით არის მორგებული, მაგრამ ოფსეტის გარეშე შეფასებული, ექსპოზიციის რაოდენობას აჩვენებს, არა მოსალოდნელ რაოდენობას.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>სიმძიმე (severity.py)</h4>
+      <ul>
+        <li>მოდელირებს ზარალის <i>თანხას ერთ ზარალზე</i> (ნულოვანი ზარალები უკვე სიხშირეშია).</li>
+        <li>LogNormal GLM (Gaussian <code>log(amount)</code>-ზე) + LightGBM Gamma GBM.</li>
+        <li><b>Gamma GLM მოიხსნა</b> — <code>statsmodels</code> IRLS/BFGS იშლება ამ მძიმედ-კუდიან სამიზნეზე (თავთაბარი იფეთქებს ან ინვერსიულად-რანჟირებულ ლოკალურ ოპტიმუმში ეცემა).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>სუფთა პრემია (pure_premium.py)</h4>
+      <ul>
+        <li><code>E[cost] = E[N]·E[S]</code>: მრავლობითი Poisson×LogNormal <b>და</b> პირდაპირი Tweedie (ძალა 1.5) <code>incurred_claim</code>-ზე.</li>
+        <li>Tweedie მართავს ნულოვან მასას + უწყვეტ კუდს ერთ მოდელში.</li>
+        <li><code>calibration_factor = mean(actual $) / mean(predicted $)</code> ასწორებს დონეს ინდიკაციამდე.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>კრედიბილურობა (credibility.py)</h4>
+      <ul>
+        <li>Bühlmann-Straub: <code>Z_i = n_i / (n_i + k)</code>, <code>k = EPV/VPP</code>.</li>
+        <li><code>n_i</code> = <b>პოლისების რაოდენობა</b> (არა დოლარის ექსპოზიცია — დოლარი ყველა სეგმენტს სრულად კრედიბილურს გახდის).</li>
+        <li>ამცირებს თითოეული სეგმენტის დაკვირვებულ სუფთა პრემიას პორტფელის საშუალოსკენ.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h4>ტარიფიკაცია (pricing.py)</h4>
+      <ul>
+        <li>ტექნიკური პრემია = <code>model_pp / target_LR</code> (სამიზნე 0.65 ნაწილ B-ში).</li>
+        <li>ტარიფის ცვლილება შეზღუდულია ±50%-ით; ელასტიურობაზე დაფუძნებული მოცულობის რეაქცია (<code>−0.5</code>).</li>
+        <li>კალიბრაციის ფაქტორი გამოიყენება ინდიკაციამდე დონის გასწორებად.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>ვალიდაცია (validation.py)</h4>
+      <ul>
+        <li>ყოველთვიური ფაქტიკური-საპირისპირო-პროგნოზირებული ზარალიანობის მონიტორინგი hold-out-ზე.</li>
+        <li>დროით გარეთ სადაზღვევო Gini (Lorenz / სიზუსტის კოეფიციენტის ფორმა).</li>
+        <li>დონის კალიბრაციის შემოწმება (კოეფიციენტი ≈ 1.0 ნიშნავს დონეში კარგად კალიბრირებულს).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- გადაწყვეტილებები -->
+<section class="slide" id="decisions">
+  <div class="kicker">სექცია 6</div>
+  <h2>მთავარი მოდელირების გადაწყვეტილებები და „რატომ“</h2>
+  <table>
+    <thead><tr><th>გადაწყვეტილება</th><th>რატომ</th></tr></thead>
+    <tbody>
+      <tr><td>დროზე დაფუძნებული გაყოფა (არა შემთხვევითი)</td><td>შემთხვევითი გაყოფა აჟონებს მომავალ პოლისებს ტრენინგში და ზრდის Gini-ს; ტესტის ფანჯარა უნდა იყოს უახლესი პერიოდი.</td></tr>
+      <tr><td><code>offset = log(earned_premium)</code></td><td>სტანდარტიზაცია ექსპოზიციის ერთეულზე; ხელახლა გამოყენება პროგნოზის დროს საჭიროა, თუ არა — მოდელი რეითს×ექსპოზიციას წინასწარმეტყველებს, არა მოსალოდნელ რაოდენობას.</td></tr>
+      <tr><td>Gamma GLM-ის მოხსნა სიმძიმისთვის</td><td>IRLS/BFGS იშლება მძიმე კუდზე (იფეთქება ან ინვერსიულ ლოკალურში ეცემა); LogNormal GLM + Gamma GBM სტაბილურია.</td></tr>
+      <tr><td>მრავლობითი freq×sev <b>და</b> Tweedie</td><td>ახსნის ღირებულების მძრავს და გადასასწორებელ შემოწმებას იძლევა; Tweedie ნატურალურად მოდელირებს ნულ-ინფლაციურ ზარალებს.</td></tr>
+      <tr><td>კრედიბილურობა იყენებს <b>პოლისების რაოდენობას</b> n</td><td>დოლარის ექსპოზიცია ყველა სეგმენტს „სრულად კრედიბილურს“ გახდის; რაოდენობა ასახავს რეალურ გამოცდილების მოცულობას.</td></tr>
+      <tr><td>±50% კორექციის ზღვარი + კრედიბილურობა</td><td>თავიდან იცილებს თხე სეგმენტებისგან დესტაბილიზაციას ექსტრემალური კორექციებით.</td></tr>
+      <tr><td>კალიბრაციის ფაქტორი ინდიკაციამდე</td><td>მრავლობითი მოდელი ნაკლებად პროგნოზირებს საშუალო სუფთა პრემიას (ფაქტორი ≈ 1.68); ასწორებს დონეს, არა ფორმას.</td></tr>
+      <tr><td>ორი სამიზნე ზარალიანობა (0.60 / 0.65)</td><td>ნაწილი A და B არის ცალკე მენეჯმენტის პარამეტრები; ორივე უნდა დაყენდეს განთავსებამდე.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ინჟინერია -->
+<section class="slide" id="eng">
+  <div class="kicker">სექცია 7</div>
+  <h2>ინჟინერიის სიმყარე — ტესტები, EDA, ექსპერიმენტები</h2>
+  <p>მოდელი, რომელსაც ვერ გაიმეორებთ და ვერ დაიცავთ, გამშვები არ არის. სამი ფენა ხდის შედეგს აუდიტისთვის მისაღებს.</p>
+  <div class="grid g3">
+    <div class="card">
+      <h4>ტესტები (<code>tests/</code>)</h4>
+      <p><b>48 ტესტი · 11 მოდული · 0 ჩავარდნა.</b> ყოველი ტესტის ფაილი ადოკუმენტებს <i>რატომ</i> არსებობს.
+        ნაკრებმა უკვე დაიჭირა NegBin <code>alpha=0</code> გადახრა (20-წუთიანი დაბლოკვა) და
+        ექსპერიმენტების <code>KeyError: 'segment'</code> შეცდომა.</p>
+    </div>
+    <div class="card">
+      <h4>EDA (<code>src/eda.py</code>)</h4>
+      <p>9-ნაბიჯიანი ფუნქცია: მიმოხილვა, სიხშირე, სიმძიმე, ექსპოზიცია, სეგმენტები, დროის ტრენდი,
+        ფიჩერის ურთიერთობები, ნულოვანი ზარალის ღრმა ანალიზი, კრედიბილურობის გადახედვა — თითოეული
+        <i>აჩვენებს</i> ფაქტებს, რომელზეც მოდელები ეყრდნობა.</p>
+    </div>
+    <div class="card">
+      <h4>ექსპერიმენტები (<code>src/experiments.py</code>)</h4>
+      <p>8 what-if გამოძიება, რომელიც <i>ამტკიცებს</i> თითოეულ არჩევანს: Gamma GLM გადახრა (EXP 2),
+        <code>log_exposure</code> აბლაცია (EXP 5), პოლისის რაოდენობა პირისპირ დოლარის კრედიბილურობას
+        (EXP 6), კალიბრაციის ეფექტი ინდიკაციის ნიშნის შემობრუნებით (EXP 7), NegBin პირისპირ Poisson (EXP 8).</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:16px"><b>პროცესის წესი:</b> ნებისმიერი ცვლილება <code>load_data.py</code>-ში,
+    მოდელში ან მეტრიკაში მზადაა მხოლოდ მაშინ, როცა <code>python -m tests.run_all</code> მწვანეა და
+    <code>python -m src.experiments</code> ჯერ კიდევ სრულდება. ეს არის ყველაზე იაფი გზა წიგნის
+    პატივსაცემობის შესანარჩუნებლად.</div>
+</section>
+
+<!-- ტესტირება -->
+<section class="slide" id="tests">
+  <div class="kicker">სექცია 8</div>
+  <h2>რა შევამოწმეთ — სრული მატრიცა</h2>
+  <p>ყოველ მოდულს აქვს ტესტის ფაილი, რომელიც ადასტურებს სისწორესაც და მოდელირების ლოგიკასაც.</p>
+  <table>
+    <thead><tr><th>მოდული</th><th># ტესტი</th><th>რა ემტკიცება</th></tr></thead>
+    <tbody>
+      <tr><td><code>test_load_data</code></td><td class="num">8</td><td>პოლისის დონე და არაცარიელი; მხოლოდ CASCO; ფიზიკური კლიენტები; პირადი გამოყენება; დადებითი უსასრულო დაზღვეული თანხა; ზარალები აგრეგირებული ნულებით; ფრანშიზა კი/არა; LR მხოლოდ სადაც earned>0</td></tr>
+      <tr><td><code>test_segments</code></td><td class="num">5</td><td>4 განზომილება წარმოდგენილი; ასაკის დიაპაზონებს შორის ხვრელი არაა; ფრანშიზა ბინარული; ავტომობილი შეკუმშული 3+-ში; სეგმენტის გასაღები უნიკალური კომბინაციაზე</td></tr>
+      <tr><td><code>test_metrics</code></td><td class="num">4</td><td>safe_div → NaN, არა ∞; ძირითადი მეტრიკები წარმოდგენილი; შიგნით თანმიმდევრული; ცნობილი პორტფელის LR მნიშვნელობა</td></tr>
+      <tr><td><code>test_recommend</code></td><td class="num">5</td><td>კორექციები ზღვარში; კრედიბილურობა [0,1]-ში; კრედიბილურობა ამცირებს თხე სეგმენტებს; ცხელი სეგმენტი +კორექცია; მოქმედების ლეიბელი თანხვედრაში</td></tr>
+      <tr><td><code>test_features</code></td><td class="num">5</td><td>დროის გაყოფა ზედაპირის გარეშე და კვეთს cutoff-ს; y_sev მხოლოდ სადაც ზარალი; ფიჩერის ინჟინერია; მატრიცის ზომები; ექსპოზიცია არაუარყოფითი</td></tr>
+      <tr><td><code>test_frequency</code></td><td class="num">4</td><td>Poisson-ის გადახრა ≥ 0; ოფსეტი ხელახლა გამოიყენება პროგნოზში; train/evaluate მუშაობს და განასხვავებს</td></tr>
+      <tr><td><code>test_severity</code></td><td class="num">4</td><td>მუდმივის Gini = 0; Gamma გადახრა ≥ 0; სატრენინგო სამიზნეს ნულები არა აქვს; train/evaluate მუშაობს და განასხვავებს</td></tr>
+      <tr><td><code>test_pure_premium</code></td><td class="num">4</td><td>Tweedie გადახრა ≥ 0; კალიბრაციის ფაქტორი გონივრული; პროგნოზი დაერთო ექსპოზიციის ტესტის რიგებს; train/evaluate განასხვავებს</td></tr>
+      <tr><td><code>test_credibility</code></td><td class="num">3</td><td>Z [0,1]-ში და k>0; საშუალო Z აჩვენებს რეალურ შემცირებას (არა სრულ კრედიბილურობას); შერეული Gini აჯობებს ნედლს დროით გარეთ</td></tr>
+      <tr><td><code>test_pricing</code></td><td class="num">3</td><td>ტარიფის ცვლილება შეზღუდული; მოცულობის ცვლილება = ელასტიურობა × ტარიფის ცვლილება; კალიბრირებული ინდიკაცია დადებითი საშუალოდ</td></tr>
+      <tr><td><code>test_validation</code></td><td class="num">3</td><td>მონიტორინგის რეპორტის ფორმა და სვეტები; hold-out Gini > 0; დონის კალიბრაცია ≈ 1</td></tr>
+      <tr><td><b>ჯამში</b></td><td class="num"><b>48</b></td><td><b>11 მოდული · 0 ჩავარდნა</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- შედეგები -->
+<section class="slide" id="results">
+  <div class="kicker">სექცია 9</div>
+  <h2>შედეგები, აღმოჩენები და ინსაითები</h2>
+
+  <h3>პორტფელი (ნაწილი A)</h3>
+  <div class="grid g4">
+    <div class="card center"><div class="big">70.6%</div><p>ზარალიანობა (სამიზნე 60%-თან)</p></div>
+    <div class="card center"><div class="big">119,745</div><p>პოლისი</p></div>
+    <div class="card center"><div class="big">GEL 172.4M</div><p>მიღებული პრემია</p></div>
+    <div class="card center"><div class="big">GEL 121.7M</div><p>განხორციელებული ზარალი</p></div>
+  </div>
+
+  <h3>მოდელის დისკრიმინაცია (დროით გარეთ, ნაწილი B)</h3>
+  <table>
+    <thead><tr><th>მოდელი</th><th>Gini</th><th>შენიშვნა</th></tr></thead>
+    <tbody>
+      <tr><td>სიხშირე — Poisson GLM</td><td class="num">0.3909</td><td>საბაზისო GLM</td></tr>
+      <tr><td>სიხშირე — LightGBM (Poisson)</td><td class="num">0.4085</td><td>სჭრიფს GLM-ებს</td></tr>
+      <tr><td>სიმძიმე — LogNormal GLM</td><td class="num">0.2664</td><td>ინტერპრეტირებადი ბაზისი</td></tr>
+      <tr><td>სუფთა პრემია — Freq×Sev (GLM)</td><td class="num">0.4086</td><td>ყველაზე ძლიერი რანჟირებელი</td></tr>
+      <tr><td>სუფთა პრემია — Tweedie GBM</td><td class="num">0.3555</td><td>კონკურენტუნარიანი გადახრაზე</td></tr>
+      <tr><td>კრედიბილურობა — შერეული Gini</td><td class="num">0.0805</td><td>ნედლი 0.0678-ის ნაცვლად (გაუმჯობესება)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>მთავარი ინსაითები</h3>
+  <ul>
+    <li><b>ახალგაზრდა მძღოლები (21–29)</b> ყველაზე ცუდები არიან ზარალიანობით <i>და</i> უკვე უხდიან
+      ყველაზე მაღალ პოლის-თითო რეითს (~2× 40+-ის რეითი) — წიგნი მაინც კარგავს ფულს მათზე.</li>
+    <li><b>ფრანშიზის გარეშე პოლისები</b> ~19 პუნქტით უარესია (0.743 პირისპირ 0.555) იგივე საშუალო
+      რეიტთან — ფრანშიზის არჩევანი არ არის ტარიფიკებული; დატვირთეთ ან ფასდაკლება გააკეთეთ.</li>
+    <li><b>დაბალი დაზღვეული თანხის ავტომობილები</b> ყველაზე ნაკლებად არიან ტარიფიკებული; რეიტის
+      მრუდი ინვერსიულია რისკის მიმართ (იაფი მანქანები ნაკლებად ფასდება, ძვირი — ზედმეტად).</li>
+    <li><b>ტესტის კალიბრაცია:</b> ფაქტიკური LR 0.8225 პირისპირ პროგნოზირებულ 0.7838 (სამიზნე 0.65) →
+      მოდელი კარგად არის კალიბრირებული <i>დონეში</i> (კოეფ. ≈ 1.05) და აჩვენებს, რომ წიგნი ~17–22%-ით
+      არის სამიზნეზე ზემოთ.</li>
+    <li>საშუალო ინდიცირებული ტარიფის ცვლილება <b>+18.5%</b>; ელასტიურობა გულისხმობს მოცულობის
+      <b>−9.3%</b>-ს; 22,505 პოლისი რეკომენდებულია გასაზრდელად, 5,735 — შესამცირებლად.</li>
+  </ul>
+</section>
+
+<!-- დასკვნა -->
+<section class="slide" id="close">
+  <div class="kicker">სექცია 10</div>
+  <h2>დასკვნა და შემდეგი ნაბიჯები</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h4>რა მოეწოდა</h4>
+      <ul>
+        <li>განმარტვადი სეგმენტის რეიტინგი (1,264 სეგმენტი) + მოდელზე დაფუძნებული ინდივიდუალურ-რისკის ტარიფიკაცია.</li>
+        <li>დროით გარეთ ვალიდირებული, სრული ტესტის / EDA / ექსპერიმენტის ჩარჩოთი.</li>
+        <li>სრული დოკუმენტაცია ინგლისურად და ქართულად (თარგმანი ხელმისაწვდომია პროექტის საქართველოს ასლში).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>შემდეგი ნაბიჯები</h4>
+      <ul>
+        <li>დააყენეთ მენეჯმენტის სამიზნე ზარალიანობები (ხარჯები + მოგების დატვირთვა) განთავსებამდე.</li>
+        <li>კალიბრირეთ სრული კრედიბილურობის სტანდარტი პორტფელის ცვალებადობაზე.</li>
+        <li>დაავალიდირეთ კორექციები hold-out პერიოდზე; სიმულირეთ პრემია/LR რეაქცია.</li>
+        <li>განათავსეთ <code>validation.py</code> მონიტორინგის დაფა; უკანა-ტესტი ინდიკაციის რეალიზებულ LR-სთან.</li>
+        <li>განიხილეთ GLMM / boosted ჰიბრიდი და სწორი Tweedie-ს ძალის ძებნა.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px">
+    <b>ძირითადი დასკვნა:</b> წიგნი ~18%-ით არის ნაკლებად ტარიფიკებული; მოდელი ხსნის <i>სად</i>
+    (ახალგაზრდა მძღოლები, ფრანშიზის გარეშე, დაბალი დაზღვეული თანხა) და მიუთითებს რისკ-ადეკვატურ,
+    კრედიბილურობით შეზღუდულ კორექციებს — ყველაფერი გამეორებადი, ტესტირებული და დოკუმენტირებული.
+  </div>
+
+  <footer>
+    CASCO ზარალის ღირებულებისა და ანდერაითინგის ტარიფის მოდელი — პროექტის პრეზენტაცია ·
+    ტესტები: 48 · 11 მოდული · 0 ჩავარდნა
+  </footer>
+</section>
+
+</main>
+
+<script>
+  var bar = document.getElementById('progress');
+  function onScroll(){
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    var p = max > 0 ? (h.scrollTop || document.body.scrollTop) / max : 0;
+    bar.style.width = (p*100).toFixed(1) + '%';
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+</script>
+</body>
+</html>

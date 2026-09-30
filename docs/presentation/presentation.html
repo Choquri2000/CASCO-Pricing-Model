@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CASCO Claims-Cost & Underwriting Model — Project Presentation</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111c33; --panel2:#16233f; --ink:#e8eefc; --muted:#9fb0d0;
+    --accent:#38bdf8; --accent2:#a78bfa; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --line:#243049; --chip:#1e2c4a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  a{color:var(--accent);text-decoration:none}
+  /* Top nav */
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(15,23,42,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 22px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header.nav .brand{font-weight:700;letter-spacing:.3px}
+  header.nav .brand span{color:var(--accent)}
+  header.nav nav{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  header.nav nav a{font-size:12.5px;color:var(--muted);padding:5px 9px;border:1px solid var(--line);
+    border-radius:999px;background:var(--chip)}
+  header.nav nav a:hover{color:var(--ink);border-color:var(--accent)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;z-index:60;transition:width .15s}
+  /* Slides */
+  main{max-width:1080px;margin:0 auto;padding:0 22px 80px}
+  section.slide{min-height:88vh;padding:54px 0 30px;border-bottom:1px dashed var(--line)}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--accent);border:1px solid var(--line);padding:4px 10px;border-radius:999px;margin-bottom:14px}
+  h1{font-size:40px;line-height:1.12;margin:.1em 0 .25em}
+  h2{font-size:30px;margin:.1em 0 .4em}
+  h3{font-size:20px;color:var(--accent2);margin:1.1em 0 .4em}
+  p{color:var(--ink)}
+  .muted{color:var(--muted)}
+  ul,ol{margin:.4em 0 1em;padding-left:1.2em}
+  li{margin:.35em 0}
+  .lead{font-size:18px;color:var(--muted);max-width:760px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h4{margin:.1em 0 .35em;font-size:16px}
+  .card p,.card li{font-size:14px;color:var(--muted)}
+  .chip{display:inline-block;background:var(--chip);border:1px solid var(--line);color:var(--muted);
+    font-size:12px;padding:3px 9px;border-radius:999px;margin:2px 4px 2px 0}
+  table{width:100%;border-collapse:collapse;margin:.6em 0 1em;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink)}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
+  .num{font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.good{background:rgba(52,211,153,.15);color:var(--good);border:1px solid rgba(52,211,153,.4)}
+  .pill.warn{background:rgba(251,191,36,.13);color:var(--warn);border:1px solid rgba(251,191,36,.4)}
+  .pill.bad{background:rgba(248,113,113,.13);color:var(--bad);border:1px solid rgba(248,113,113,.4)}
+  .pill.acc{background:rgba(56,189,248,.13);color:var(--accent);border:1px solid rgba(56,189,248,.4)}
+  pre{background:#0b1322;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    overflow:auto;font-size:13px;color:#cfe3ff}
+  code{font-family:"Cascadia Code",Consolas,Monaco,monospace;background:var(--chip);
+    padding:1px 6px;border-radius:6px;font-size:13px}
+  .cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center}
+  .cover h1{font-size:54px}
+  .cover .sub{font-size:20px;color:var(--muted);max-width:720px}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:26px;color:var(--muted);font-size:14px}
+  .meta b{color:var(--ink)}
+  .toc{columns:2;column-gap:30px}
+  @media(max-width:820px){.toc{columns:1}}
+  .toc a{display:block;padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink)}
+  .toc a:hover{color:var(--accent)}
+  .note{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:8px;color:var(--muted);font-size:14px}
+  .big{font-size:34px;font-weight:700;color:var(--accent)}
+  .center{text-align:center}
+  footer{color:var(--muted);font-size:13px;text-align:center;padding:30px 0 10px}
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .flow .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;flex:1;min-width:120px}
+  .flow .step b{color:var(--accent)}
+  .flow .arrow{display:flex;align-items:center;color:var(--muted);font-size:18px}
+  @media(max-width:820px){.flow .arrow{transform:rotate(90deg)}}
+  .print-hint{font-size:12px;color:var(--muted)}
+  @media print{
+    body{background:#fff;color:#111}
+    header.nav,.progress{display:none}
+    section.slide{min-height:auto;border-bottom:1px solid #ccc;page-break-inside:avoid}
+    .card{break-inside:avoid}
+    a{color:#0366d6}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<header class="nav">
+  <div class="brand">CASCO <span>Underwriting</span> Model</div>
+  <nav>
+    <a href="#cover">Cover</a>
+    <a href="#agenda">Agenda</a>
+    <a href="#overview">Overview</a>
+    <a href="#data">Data</a>
+    <a href="#arch">Architecture</a>
+    <a href="#partA">Part A</a>
+    <a href="#partB">Part B</a>
+    <a href="#decisions">Decisions</a>
+    <a href="#eng">Engineering</a>
+    <a href="#tests">Testing</a>
+    <a href="#results">Results</a>
+    <a href="#close">Close</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- COVER -->
+<section class="slide cover" id="cover">
+  <div class="kicker">TBC Insurance — Technical Task</div>
+  <h1>CASCO Claims-Cost & Underwriting Pricing Model</h1>
+  <div class="sub">An end-to-end, auditable pricing pipeline — from raw policy/claims data to
+    segment experience-rating and individual-risk statistical models, with a full test, EDA and
+    experiment harness. Plus a complete Georgian-language translation & review.</div>
+  <div class="meta">
+    <div><b>Domain:</b> Motor (CASCO) insurance</div>
+    <div><b>Two parts:</b> A — Segment rating · B — Advanced GLMs/GBM</div>
+    <div><b>Tests:</b> <span class="pill good">48 tests · 11 modules · 0 failures</span></div>
+    <div><b>Deliverables:</b> Python src + docs + REPORT + tests</div>
+  </div>
+  <p class="print-hint" style="margin-top:30px">Tip: use the top nav to jump to any section, or scroll.
+    Print / "Save as PDF" for a static handout.</p>
+</section>
+
+<!-- AGENDA -->
+<section class="slide" id="agenda">
+  <div class="kicker">What this presentation covers</div>
+  <h2>Agenda</h2>
+  <div class="toc">
+    <a href="#overview">1 · Business problem & objectives</a>
+    <a href="#data">2 · Data sources & schema</a>
+    <a href="#arch">3 · Solution architecture (pipeline)</a>
+    <a href="#partA">4 · Part A — Segment experience-rating</a>
+    <a href="#partB">5 · Part B — Advanced statistical models</a>
+    <a href="#decisions">6 · Key modelling decisions & "why"</a>
+    <a href="#eng">7 · Engineering strength: tests, EDA, experiments</a>
+    <a href="#tests">8 · What we tested (full matrix)</a>
+    <a href="#results">9 · Results, findings & insights</a>
+    <a href="#close">10 · Conclusion & next steps</a>
+  </div>
+</section>
+
+<!-- OVERVIEW -->
+<section class="slide" id="overview">
+  <div class="kicker">Section 1</div>
+  <h2>Business Problem & Objectives</h2>
+  <p class="lead">CASCO is comprehensive motor insurance. The book is <b>under-priced</b>: the
+    portfolio loss ratio is <b>70.6%</b> against a <b>60%</b> management target — roughly an
+    <b>18% average under-pricing</b>. The goal is a transparent, defensible pricing model that
+    (a) explains where the book loses money and (b) indicates risk-adequate rate corrections.</p>
+
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card">
+      <h4>Objective 1 — Diagnose</h4>
+      <p>Segment the book along the four rating dimensions and surface the hot / cold segments
+        driving the 70.6% loss ratio.</p>
+    </div>
+    <div class="card">
+      <h4>Objective 2 — Indicate</h4>
+      <p>Produce credibility-weighted, capped rate corrections (±50%) from each segment's
+        experience vs. the target loss ratio.</p>
+    </div>
+    <div class="card">
+      <h4>Objective 3 — Model</h4>
+      <p>Build individual-risk frequency × severity models validated <b>out-of-time</b>, with a
+        model-based rate indication and elasticity response.</p>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px">
+    <b>Definition:</b> Loss Ratio (LR) = Incurred Claims ÷ Earned Premium. A pure-premium model
+    estimates <code>E[cost] = E[N] · E[S]</code> where <code>N</code> = claim count (frequency) and
+    <code>S</code> = claim amount (severity). Technical premium = <code>model_pp / target_LR</code>.
+  </div>
+</section>
+
+<!-- DATA -->
+<section class="slide" id="data">
+  <div class="kicker">Section 2</div>
+  <h2>Data Sources & Schema</h2>
+  <p>All raw inputs live in <code>data/</code>. A single trusted cleaning/join layer
+    (<code>src/load_data.py</code>) turns them into one analysis-ready policy-level frame.</p>
+
+  <table>
+    <thead><tr><th>File</th><th>Role</th><th>Key content</th></tr></thead>
+    <tbody>
+      <tr><td><code>Policies_1805_v4.csv</code></td><td>Policy master</td><td>premium, sum insured, vehicle, driver age, effective date, deductible</td></tr>
+      <tr><td><code>Claims_1805_v2.csv</code></td><td>Claims</td><td>claim amounts, claim dates, linked policy</td></tr>
+      <tr><td><code>Clients_1805_v3.csv</code></td><td>Client master</td><td>client type (physical/legal), personal-use flag</td></tr>
+      <tr><td><code>enrcols.csv</code></td><td>Policy enrichment</td><td>deductible category, eligible driver count, min driver age, car age</td></tr>
+      <tr><td><code>franchise_field_categories.csv</code></td><td>Lookup</td><td>deductible category mapping</td></tr>
+      <tr><td><code>fx_rates.csv</code></td><td>FX</td><td>currency conversion to GEL (USD sum-insured → GEL)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Cleaning rules (load_data.py)</h3>
+  <ul>
+    <li>Keep only <b>CASCO</b> policies, <b>physical</b> clients, <b>personal-use</b> vehicles.</li>
+    <li>Validate claims; convert <code>suminsured</code> to GEL via FX; compute <code>earned_premium</code>.</li>
+    <li>Aggregate claims per policy (zeros filled) and compute <code>loss_ratio</code> only where
+      <code>earned_premium > 0</code> (safe divide → NaN otherwise).</li>
+    <li>Derive <code>exposure = earned_premium.clip(lower=0)</code> — used as the GLM offset / GBM weight.</li>
+    <li>Enrich with <code>deductible_type</code> (yes/no), <code>eligible_driver_count</code>,
+      <code>min_driver_age</code>, <code>carage</code> from the enrcols file.</li>
+  </ul>
+  <div class="note">This single layer is the only place raw data is touched — every downstream module
+    consumes the same clean frame, so changes cascade predictably.</div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="slide" id="arch">
+  <div class="kicker">Section 3</div>
+  <h2>Solution Architecture</h2>
+  <p>Two cooperating parts share the same cleaned frame. Part A is a fast, explainable
+    segment view; Part B adds individual-risk statistical models validated out-of-time.</p>
+
+  <h3>Part A — Segment experience-rating (run.py orchestrates)</h3>
+  <div class="flow">
+    <div class="step"><b>load_data</b><br>clean + join</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>segments</b><br>4 rating dims</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>metrics</b><br>LR, rate, freq, sev</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>recommend</b><br>credibility-weighted ±50%</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>run</b><br>CSV + Excel</div>
+  </div>
+
+  <h3 style="margin-top:22px">Part B — Advanced individual-risk models</h3>
+  <div class="flow">
+    <div class="step"><b>features</b><br>store + time split</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>frequency</b><br>Poisson/NegBin/GBM</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>severity</b><br>LogNormal/Gamma GBM</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>pure_premium</b><br>freq×sev + Tweedie</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>credibility</b><br>Bühlmann-Straub</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>pricing</b><br>indication + elasticity</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>validation</b><br>out-of-time Gini</div>
+  </div>
+
+  <div class="grid g3" style="margin-top:22px">
+    <div class="card"><h4>Time-based split</h4><p>Train <code>efdate < 2025-01-01</code>,
+      test <code>efdate ≥ 2025-01-01</code>. Avoids leakage that random splits cause.</p></div>
+    <div class="card"><h4>Exposure as offset</h4><p><code>offset = log(exposure)</code> where
+      <code>exposure = earned_premium</code>. Re-applied at prediction time.</p></div>
+    <div class="card"><h4>Outputs</h4><p>1,264 segments, portfolio summary, 6 breakdown sheets,
+      plus model metrics & monitoring tables.</p></div>
+  </div>
+</section>
+
+<!-- PART A -->
+<section class="slide" id="partA">
+  <div class="kicker">Section 4</div>
+  <h2>Part A — Segment Experience-Rating</h2>
+
+  <h3>Segmentation (segments.py)</h3>
+  <p>Four rating dimensions, collapsed for stability:</p>
+  <div class="grid g4">
+    <div class="card"><h4>Age</h4><p>18–20 · 21–25 · 26–29 · 30–40 · >40</p></div>
+    <div class="card"><h4>Vehicle type</h4><p>SUV-type · Sedan · Coupé/Cabrio (collapsed to 3)</p></div>
+    <div class="card"><h4>Deductible</h4><p>Yes / No</p></div>
+    <div class="card"><h4>Sum insured</h4><p>USD bands from the brief (≤5k · 1k-wide bands 5k–50k · >50k)</p></div>
+  </div>
+  <p class="muted" style="margin-top:10px">→ <b>1,264</b> composed segments (4 dims × bands).</p>
+
+  <h3>Metrics (metrics.py)</h3>
+  <ul>
+    <li><code>aggregate_by</code> computes per-segment loss ratio, policy rate, frequency, severity.</li>
+    <li><code>safe_div</code> returns NaN (not inf) on zero exposure — prevents silent distortions.</li>
+    <li><code>aggregate_overall</code> gives the one-line portfolio totals.</li>
+  </ul>
+
+  <h3>Recommendations (recommend.py)</h3>
+  <ul>
+    <li>Correction = credibility-weighted experience vs. <code>target_loss_ratio = 0.60</code>.</li>
+    <li>Capped at <b>±50%</b>; thin segments shrink toward the portfolio mean via credibility <code>Z</code>.</li>
+    <li>Action label (increase / decrease / hold) attached for underwriters.</li>
+  </ul>
+  <div class="note">All corrections are point estimates that ignore elasticity — a documented
+    limitation (price changes may shift demand/mix).</div>
+</section>
+
+<!-- PART B -->
+<section class="slide" id="partB">
+  <div class="kicker">Section 5</div>
+  <h2>Part B — Advanced Statistical Models</h2>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>Frequency (frequency.py)</h4>
+      <ul>
+        <li>Poisson & Negative-Binomial GLM with <code>offset = log(exposure)</code>.</li>
+        <li>LightGBM Poisson GBM using <code>log_exposure</code> as a feature (trees can't use an offset like GLMs).</li>
+        <li>NegBin started from Poisson MLE with <code>alpha=0.1</code> (never 0 → avoids <code>log(0)</code> BFGS blow-up).</li>
+        <li><b>Offset re-applied at predict</b> — a GLM fit with an offset but scored without it predicts rate×exposure, not expected count.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Severity (severity.py)</h4>
+      <ul>
+        <li>Models claim <i>amount per claim</i> (zero claims already in frequency).</li>
+        <li>LogNormal GLM (Gaussian on <code>log(amount)</code>) + LightGBM Gamma GBM.</li>
+        <li><b>Gamma GLM dropped</b> — <code>statsmodels</code> IRLS/BFGS diverges on this heavy-tailed target (blows up or falls into an inverted-local optimum).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Pure premium (pure_premium.py)</h4>
+      <ul>
+        <li><code>E[cost] = E[N]·E[S]</code>: multiplicative Poisson×LogNormal <b>and</b> direct Tweedie (power 1.5) on <code>incurred_claim</code>.</li>
+        <li>Tweedie handles the zero-mass + continuous tail in one model.</li>
+        <li><code>calibration_factor = mean(actual $) / mean(predicted $)</code> corrects the level before indication.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Credibility (credibility.py)</h4>
+      <ul>
+        <li>Bühlmann-Straub: <code>Z_i = n_i / (n_i + k)</code>, <code>k = EPV/VPP</code>.</li>
+        <li><code>n_i</code> = <b>policy count</b> (not dollar exposure — dollar exposure would make every segment fully credible).</li>
+        <li>Shrinks each segment's observed pure premium toward the portfolio mean.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h4>Pricing (pricing.py)</h4>
+      <ul>
+        <li>Technical premium = <code>model_pp / target_LR</code> (target 0.65 in Part B).</li>
+        <li>Rate change capped ±50%; elasticity-based volume response (<code>−0.5</code>).</li>
+        <li>Calibration factor applied so the model level is right before indication.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Validation (validation.py)</h4>
+      <ul>
+        <li>Monthly actual-vs-predicted loss-ratio monitoring on the hold-out.</li>
+        <li>Out-of-time insurance Gini (Lorenz / accuracy-ratio form).</li>
+        <li>Level calibration check (ratio ≈ 1.0 means well-calibrated in level).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- DECISIONS -->
+<section class="slide" id="decisions">
+  <div class="kicker">Section 6</div>
+  <h2>Key Modelling Decisions & "Why"</h2>
+  <table>
+    <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Time-based split (not random)</td><td>Random split leaks future policies into training and inflates Gini; the test window must be the most recent period.</td></tr>
+      <tr><td><code>offset = log(earned_premium)</code></td><td>Standardises each policy to one unit of exposure; re-applied at predict or the model predicts rate×exposure, not expected count.</td></tr>
+      <tr><td>Drop Gamma GLM for severity</td><td>IRLS/BFGS diverges on the heavy tail (blows up or stuck in inverted local optimum); LogNormal GLM + Gamma GBM are stable.</td></tr>
+      <tr><td>Multiplicative freq×sev <b>and</b> Tweedie</td><td>Decomposes the driver of cost and gives a cross-check; Tweedie natively models zero-inflated claims.</td></tr>
+      <tr><td>Credibility uses <b>policy count</b> n</td><td>Dollar exposure would make every segment "fully credible"; count reflects real experience volume.</td></tr>
+      <tr><td>±50% correction cap + credibility</td><td>Prevents thin segments from producing destabilising extreme corrections.</td></tr>
+      <tr><td>Calibration factor before indication</td><td>The multiplicative model under-predicts the average pure premium (factor ≈ 1.68); corrects level, not shape.</td></tr>
+      <tr><td>Two target loss ratios (0.60 / 0.65)</td><td>Part A and Part B are separate management parameters; both must be set before deployment.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ENGINEERING -->
+<section class="slide" id="eng">
+  <div class="kicker">Section 7</div>
+  <h2>Engineering Strength — Tests, EDA, Experiments</h2>
+  <p>A model you cannot repeat or defend is not shippable. Three layers make the result auditable.</p>
+  <div class="grid g3">
+    <div class="card">
+      <h4>Tests (<code>tests/</code>)</h4>
+      <p><b>48 tests · 11 modules · 0 failures.</b> Each test file documents <i>why</i> it exists.
+        The suite is a regression net that already caught a NegBin <code>alpha=0</code> divergence
+        (20-min lock-up) and an experiments <code>KeyError: 'segment'</code>.</p>
+    </div>
+    <div class="card">
+      <h4>EDA (<code>src/eda.py</code>)</h4>
+      <p>9-step function: overview, frequency, severity, exposure, segments, time trend,
+        feature relationships, zero-claim deep-dive, credibility preview — each <i>shows</i> the
+        facts the models rely on.</p>
+    </div>
+    <div class="card">
+      <h4>Experiments (<code>src/experiments.py</code>)</h4>
+      <p>8 what-if probes that <i>prove</i> each modelling choice: Gamma GLM divergence (EXP 2),
+        <code>log_exposure</code> ablation (EXP 5), policy-count vs dollar credibility (EXP 6),
+        calibration effect flipping the indication sign (EXP 7), NegBin vs Poisson (EXP 8).</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:16px"><b>Process rule:</b> any change in <code>load_data.py</code>,
+    a model, or a metric is "ready" only when <code>python -m tests.run_all</code> is green and
+    <code>python -m src.experiments</code> still completes. This is the cheapest way to keep the
+    book trustworthy.</div>
+</section>
+
+<!-- TESTS -->
+<section class="slide" id="tests">
+  <div class="kicker">Section 8</div>
+  <h2>What We Tested — Full Matrix</h2>
+  <p>Every module has a test file asserting both correctness and the modelling rationale.</p>
+  <table>
+    <thead><tr><th>Module</th><th># Tests</th><th>What is asserted</th></tr></thead>
+    <tbody>
+      <tr><td><code>test_load_data</code></td><td class="num">8</td><td>policy-level & non-empty; CASCO-only; physical clients; personal-use; positive finite sum-insured; claims aggregated w/ zeros; deductible yes/no; LR only where earned>0</td></tr>
+      <tr><td><code>test_segments</code></td><td class="num">5</td><td>4 dimensions present; age bins gap-free; franchise binary; vehicle collapsed to 3+; segment key unique per combo</td></tr>
+      <tr><td><code>test_metrics</code></td><td class="num">4</td><td>safe_div → NaN not inf; core metrics present; internally consistent; known portfolio LR value</td></tr>
+      <tr><td><code>test_recommend</code></td><td class="num">5</td><td>corrections within cap; credibility in [0,1]; credibility shrinks thin segments; hot segment +correction; action label consistent</td></tr>
+      <tr><td><code>test_features</code></td><td class="num">5</td><td>time split no overlap & respects cutoff; y_sev only where claim; feature engineering; matrix shapes; exposure non-negative</td></tr>
+      <tr><td><code>test_frequency</code></td><td class="num">4</td><td>Poisson deviance ≥ 0; offset re-applied at predict; train/evaluate runs & discriminates</td></tr>
+      <tr><td><code>test_severity</code></td><td class="num">4</td><td>Gini of constant = 0; Gamma deviance ≥ 0; training target has no zeros; train/evaluate runs & discriminates</td></tr>
+      <tr><td><code>test_pure_premium</code></td><td class="num">4</td><td>Tweedie deviance ≥ 0; calibration factor sensible; predict aligned to exposed test rows; train/evaluate discriminates</td></tr>
+      <tr><td><code>test_credibility</code></td><td class="num">3</td><td>Z in [0,1] & k>0; mean Z shows real shrinkage (not full credibility); blended Gini beats raw out-of-time</td></tr>
+      <tr><td><code>test_pricing</code></td><td class="num">3</td><td>rate change capped; volume change = elasticity × rate change; calibrated indication positive on average</td></tr>
+      <tr><td><code>test_validation</code></td><td class="num">3</td><td>monitoring report shape & columns; holdout Gini > 0; level calibration ≈ 1</td></tr>
+      <tr><td><b>Total</b></td><td class="num"><b>48</b></td><td><b>11 modules · 0 failures</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- RESULTS -->
+<section class="slide" id="results">
+  <div class="kicker">Section 9</div>
+  <h2>Results, Findings & Insights</h2>
+
+  <h3>Portfolio (Part A)</h3>
+  <div class="grid g4">
+    <div class="card center"><div class="big">70.6%</div><p>Loss ratio (vs 60% target)</p></div>
+    <div class="card center"><div class="big">119,745</div><p>Policies</p></div>
+    <div class="card center"><div class="big">GEL 172.4M</div><p>Earned premium</p></div>
+    <div class="card center"><div class="big">GEL 121.7M</div><p>Incurred claims</p></div>
+  </div>
+
+  <h3>Model discrimination (out-of-time, Part B)</h3>
+  <table>
+    <thead><tr><th>Model</th><th>Gini</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>Frequency — Poisson GLM</td><td class="num">0.3909</td><td>baseline GLM</td></tr>
+      <tr><td>Frequency — LightGBM (Poisson)</td><td class="num">0.4085</td><td>beats GLMs</td></tr>
+      <tr><td>Severity — LogNormal GLM</td><td class="num">0.2664</td><td>interpretable base</td></tr>
+      <tr><td>Pure premium — Freq×Sev (GLM)</td><td class="num">0.4086</td><td>strongest ranker</td></tr>
+      <tr><td>Pure premium — Tweedie GBM</td><td class="num">0.3555</td><td>competitive on deviance</td></tr>
+      <tr><td>Credibility — blended Gini</td><td class="num">0.0805</td><td>vs raw 0.0678 (improvement)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key insights</h3>
+  <ul>
+    <li><b>Young drivers (21–29)</b> are the worst on loss ratio <i>and</i> already pay the highest per-policy rate (~2× the >40 rate) — the book still loses money on them.</li>
+    <li><b>No-deductible policies</b> run ~19 pts worse (0.743 vs 0.555) at the <i>same</i> average rate — deductible choice is not priced; load or discount accordingly.</li>
+    <li><b>Low sum-insured cars</b> are the most under-priced; the rate curve is inverse to risk (cheap cars under-priced, expensive cars over-priced).</li>
+    <li><b>Test calibration:</b> actual LR 0.8225 vs predicted 0.7838 (target 0.65) → model is well-calibrated in <i>level</i> (ratio ≈ 1.05) and shows the book is ~17–22% above target.</li>
+    <li>Avg indicated rate change <b>+18.5%</b>; elasticity implies volume <b>−9.3%</b>; 22,505 policies recommended for increase, 5,735 for decrease.</li>
+  </ul>
+</section>
+
+<!-- CLOSE -->
+<section class="slide" id="close">
+  <div class="kicker">Section 10</div>
+  <h2>Conclusion & Next Steps</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h4>What was delivered</h4>
+      <ul>
+        <li>Explainable segment rating (1,264 segments) + model-based individual-risk pricing.</li>
+        <li>Out-of-time validated, with a full test / EDA / experiment harness.</li>
+        <li>Complete Georgian translation, reviewed and verified (0 test failures).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Next steps</h4>
+      <ul>
+        <li>Set management target loss ratios (cost + profit load) before deployment.</li>
+        <li>Calibrate full-credibility standard to portfolio volatility.</li>
+        <li>Validate corrections on a hold-out; simulate premium/ LR response.</li>
+        <li>Deploy <code>validation.py</code> monitoring dashboard; back-test indication vs realised LR.</li>
+        <li>Consider GLMM / boosted hybrid and a proper Tweedie power search.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px">
+    <b>Bottom line:</b> the book is under-priced by ~18%; the model explains <i>where</i> (young
+    drivers, no-deductible, low sum-insured) and indicates risk-adequate, credibility-capped
+    corrections — all reproducible, tested, and documented in both English and Georgian.
+  </div>
+
+  <footer>
+    CASCO Claims-Cost & Underwriting Model — Project Presentation ·
+    Tests: 48 · 11 modules · 0 failures · EN + KA
+  </footer>
+</section>
+
+</main>
+
+<script>
+  // Scroll progress bar
+  var bar = document.getElementById('progress');
+  function onScroll(){
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    var p = max > 0 ? (h.scrollTop || document.body.scrollTop) / max : 0;
+    bar.style.width = (p*100).toFixed(1) + '%';
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+</script>
+</body>
+</html>
